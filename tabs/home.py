@@ -10,5 +10,10 @@ with col1:
     st.page_link("tabs/students.py", label="Students", icon=":material/person:")
     st.write("Search and filter for publicly available data on students.")
 with col2:
+    st.page_link("tabs/pyqs.py", label="PYQs", icon=":material/archive:")
+    st.write("Search and filter for publicly available PYQs, generously uploaded by students.")
+with col3:
     st.page_link("tabs/terms.py", label="Terms", icon=":material/list:")
     st.write("Terms and Conditions for this website.")
+
+st.link_button("Who made this?", url="https://github.com/PolybitRockzz/")

@@ -35,30 +35,30 @@ course_codes = {
     "30": "B.Tech in Electronics and Computer Science",
 }
 
-st.title("KIIT Search-able Archive")
+st.title("Student Archive")
 
 st.caption("We only contain student data of 2024-25 admitted students.")
 
 st.subheader("Filters")
 
 course_options = st.selectbox("Select Course", (course for course in list(course_codes.values()) if course != 'B.Tech in [N/A]'), index=5)
-name_filter = st.text_input("Name Filter", "")
+name_filter = st.text_input("Name Filter (empty for all names)", "")
 col1, col2 = st.columns(2)
 with col1:
     scheme_options = st.selectbox("Select Scheme", ("Both A and B", "A", "B"), index=0)
 with col2:
-    class_options = st.number_input("Select Class", min_value=1, max_value=33, value=1, step=1)
+    class_options = st.number_input("Select Class (0 for all classes)", min_value=0, max_value=33, value=1, step=1)
 do_it = st.button("Search Students")
 
 if do_it:
-    with open('2024students.csv', 'r') as f:
+    with open('students/2024students.csv', 'r') as f:
         reader = csv.reader(f)
         data = { "Roll Number": [], "Student Name": [], "Section": [], "Course": [] }
         for row in reader:
             if name_filter.strip() in row[1]:
                 if course_options == 'Anything' or (course_codes.get(row[0][2:4]) == course_options):
                     if scheme_options == 'Both A and B' or (scheme_options == row[2][0]):
-                        if class_options == int(row[2].strip()[1:]):
+                        if class_options == 0 or class_options == int(row[2].strip()[1:]):
                             data["Roll Number"].append(row[0])
                             data["Student Name"].append(row[1])
                             data["Section"].append(row[2])
