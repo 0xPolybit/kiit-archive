@@ -41,17 +41,18 @@ st.caption("We only contain student data of 2024-25 admitted students.")
 
 st.subheader("Filters")
 
-course_options = st.selectbox("Select Course", (course for course in list(course_codes.values()) if course != 'B.Tech in [N/A]'), index=5)
+year_options = st.selectbox("Select Academic Year of Admission", ("2024-25"), index=0)
+course_options = st.selectbox("Select B.Tech Course", (course for course in list(course_codes.values()) if course != 'B.Tech in [N/A]'), index=5)
 name_filter = st.text_input("Name Filter (empty for all names)", "")
 col1, col2 = st.columns(2)
 with col1:
-    scheme_options = st.selectbox("Select Scheme", ("Both A and B", "A", "B"), index=0)
+    scheme_options = st.selectbox("Select Class Scheme", ("Both A and B", "A", "B"), index=0)
 with col2:
-    class_options = st.number_input("Select Class (0 for all classes)", min_value=0, max_value=33, value=1, step=1)
+    class_options = st.number_input("Select Class Batch (0 for all batches)", min_value=0, max_value=33, value=1, step=1)
 do_it = st.button("Search Students")
 
 if do_it:
-    with open('students/2024students.csv', 'r') as f:
+    with open(f'students/{year_options[0:4]}students.csv', 'r') as f:
         reader = csv.reader(f)
         data = { "Roll Number": [], "Student Name": [], "Section": [], "Course": [] }
         for row in reader:
@@ -63,6 +64,8 @@ if do_it:
                             data["Student Name"].append(row[1])
                             data["Section"].append(row[2])
                             data["Course"].append(course_codes.get(row[0][2:4]))
-    st.dataframe(data, use_container_width=True)
-else:
-    st.info("Make sure to be as specific as you can be.")
+    if len(data["Roll Number"]) == 0:
+        st.error("Oops! Looks like there's no student information for that criteria.")
+    else:
+        st.subheader("Results")
+        st.dataframe(data, use_container_width=True)
