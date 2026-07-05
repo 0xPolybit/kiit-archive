@@ -15,6 +15,23 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
   --radius: 10px;
   --max-w: 1100px;
+  --thead-bg: #f6f7f9;
+  --row-hover: #fafbfc;
+}
+
+body.theme-dark {
+  --bg: #0f1115;
+  --surface: #161a21;
+  --text: #e6e8eb;
+  --muted: #9aa3ad;
+  --border: #262b34;
+  --accent: #6ea8fe;
+  --accent-soft: #1e2a44;
+  --danger: #f87171;
+  --danger-soft: #3b1d1d;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --thead-bg: #1d222b;
+  --row-hover: #1c2129;
 }
 
 * { box-sizing: border-box; }
@@ -84,6 +101,19 @@ a:hover { text-decoration: underline; }
 .nav-link:hover { background: var(--accent-soft); text-decoration: none; }
 .nav-link.active { background: var(--accent-soft); color: var(--accent); }
 .nav-link .material-symbols-rounded { font-size: 18px; }
+
+/* Theme toggle button — inherits nav-link styling but stays square */
+.theme-toggle { margin: 0; padding: 0; display: inline-flex; }
+.theme-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.theme-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 /* Layout */
 .container {
@@ -226,7 +256,7 @@ table.data td {
   border-bottom: 1px solid var(--border);
 }
 table.data thead th {
-  background: #f6f7f9;
+  background: var(--thead-bg);
   font-weight: 600;
   font-size: 0.85rem;
   color: var(--muted);
@@ -234,7 +264,7 @@ table.data thead th {
   letter-spacing: 0.03em;
 }
 table.data tbody tr:last-child td { border-bottom: 0; }
-table.data tbody tr:hover { background: #fafbfc; }
+table.data tbody tr:hover { background: var(--row-hover); }
 
 /* PYQ results */
 .pyq-grid {
