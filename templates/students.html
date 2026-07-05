@@ -34,7 +34,7 @@
           <label for="scheme">Scheme</label>
           <select id="scheme" name="scheme">
             {% for s in scheme_options %}
-              <option value="{{ s }}" {% if form.scheme == s %}selected{% endif %}>{{ s.upper() if s != 'both' else 'Both A &amp; B' }}</option>
+              <option value="{{ s }}" {% if form.scheme == s %}selected{% endif %}>{{ s.upper() if s != 'both' else 'Both A & B' }}</option>
             {% endfor %}
           </select>
         </div>
