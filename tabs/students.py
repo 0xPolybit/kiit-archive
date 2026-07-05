@@ -1,7 +1,19 @@
-import streamlit as st
-import csv
+"""Students tab — search and filter the 2024-25 admitted-student CSV.
 
-course_codes = {
+Logic mirrors the Streamlit implementation: course code prefix (digits 2-3
+of the roll number) maps to a B.Tech program, section letter maps to the
+class scheme (A/B), trailing digits map to the class batch.
+"""
+
+import csv
+import os
+
+from flask import Blueprint, current_app, render_template, request
+
+students_bp = Blueprint("students", __name__)
+
+
+COURSE_CODES = {
     "00": "Anything",
     "01": "B.Tech in Civil Engineering",
     "02": "B.Tech in Mechanical Engineering",
@@ -17,7 +29,7 @@ course_codes = {
     "12": "B.Tech in [N/A]",
     "13": "B.Tech in [N/A]",
     "14": "B.Tech in [N/A]",
-    "15": "B.Tech in [N/A]",
+    "15": "B.Tech in Computer Science & Engineering (AL/ML)",
     "16": "B.Tech in [N/A]",
     "17": "B.Tech in [N/A]",
     "18": "B.Tech in [N/A]",
@@ -35,37 +47,68 @@ course_codes = {
     "30": "B.Tech in Electronics and Computer Science",
 }
 
-st.title("Student Archive")
+YEAR_OPTIONS = ["2024-25"]
+SCHEME_OPTIONS = ["Both A and B", "A", "B"]
+COURSE_CHOICES = [c for c in COURSE_CODES.values() if c != "B.Tech in [N/A]"]
 
-st.caption("We only contain student data of 2024-25 admitted students.")
 
-st.subheader("Filters")
+def _filter_students(year: str, course: str, name: str, scheme: str, batch: int) -> list[dict]:
+    csv_path = os.path.join(
+        current_app.root_path, "students", f"{year[0:4]}students.csv"
+    )
+    if not os.path.exists(csv_path):
+        return []
 
-year_options = st.selectbox("Select Academic Year of Admission", ("2024-25"), index=0)
-course_options = st.selectbox("Select B.Tech Course", (course for course in list(course_codes.values()) if course != 'B.Tech in [N/A]'), index=5)
-name_filter = st.text_input("Name Filter (empty for all names)", "")
-col1, col2 = st.columns(2)
-with col1:
-    scheme_options = st.selectbox("Select Class Scheme", ("Both A and B", "A", "B"), index=0)
-with col2:
-    class_options = st.number_input("Select Class Batch (0 for all batches)", min_value=0, max_value=33, value=1, step=1)
-do_it = st.button("Search Students")
+    rows = []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if not row or len(row) < 3:
+                continue
+            if name.strip() not in row[1]:
+                continue
+            if course != "Anything" and COURSE_CODES.get(row[0][2:4]) != course:
+                continue
+            if scheme != "Both A and B" and scheme != row[2][0]:
+                continue
+            if batch != 0 and batch != int(row[2].strip()[1:]):
+                continue
+            rows.append({
+                "Roll Number": row[0],
+                "Student Name": row[1],
+                "Section": row[2],
+                "Course": COURSE_CODES.get(row[0][2:4], "B.Tech in [N/A]"),
+            })
+    return rows
 
-if do_it:
-    with open(f'students/{year_options[0:4]}students.csv', 'r') as f:
-        reader = csv.reader(f)
-        data = { "Roll Number": [], "Student Name": [], "Section": [], "Course": [] }
-        for row in reader:
-            if name_filter.strip() in row[1]:
-                if course_options == 'Anything' or (course_codes.get(row[0][2:4]) == course_options):
-                    if scheme_options == 'Both A and B' or (scheme_options == row[2][0]):
-                        if class_options == 0 or class_options == int(row[2].strip()[1:]):
-                            data["Roll Number"].append(row[0])
-                            data["Student Name"].append(row[1])
-                            data["Section"].append(row[2])
-                            data["Course"].append(course_codes.get(row[0][2:4]))
-    if len(data["Roll Number"]) == 0:
-        st.error("Oops! Looks like there's no student information for that criteria.")
-    else:
-        st.subheader("Results")
-        st.dataframe(data, use_container_width=True)
+
+@students_bp.route("/", methods=["GET"])
+def index():
+    year = request.args.get("year", YEAR_OPTIONS[0])
+    course = request.args.get("course", "B.Tech in Computer Science and Engineering")
+    name = request.args.get("name", "")
+    scheme = request.args.get("scheme", SCHEME_OPTIONS[0])
+    try:
+        batch = int(request.args.get("batch", "1"))
+    except ValueError:
+        batch = 1
+
+    searched = any(k in request.args for k in ("year", "course", "name", "scheme", "batch", "do"))
+    rows: list[dict] = []
+    if searched:
+        rows = _filter_students(year, course, name, scheme, batch)
+
+    return render_template(
+        "students.html",
+        year_options=YEAR_OPTIONS,
+        course_choices=COURSE_CHOICES,
+        scheme_options=SCHEME_OPTIONS,
+        form={
+            "year": year,
+            "course": course,
+            "name": name,
+            "scheme": scheme,
+            "batch": batch,
+        },
+        rows=rows,
+        searched=searched,
+    )

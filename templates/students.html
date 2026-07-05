@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Students &middot; KIIT Archive{% endblock %}
+{% block content %}
+  <h1>Student Archive</h1>
+  <p class="caption">We only contain student data of 2024-25 admitted students.</p>
+
+  <div class="panel">
+    <h2>Filters</h2>
+    <form method="get" action="{{ url_for('students.index') }}">
+      <div class="form-row">
+        <div class="field">
+          <label for="year">Select Academic Year of Admission</label>
+          <select id="year" name="year">
+            {% for y in year_options %}
+              <option value="{{ y }}" {% if form.year == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="course">Select B.Tech Course</label>
+          <select id="course" name="course">
+            <option value="Anything" {% if form.course == 'Anything' %}selected{% endif %}>Anything</option>
+            {% for c in course_choices %}
+              <option value="{{ c }}" {% if form.course == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="name">Name Filter (empty for all names)</label>
+          <input id="name" name="name" type="text" value="{{ form.name }}" placeholder="">
+        </div>
+      </div>
+
+      <div class="form-row two" style="margin-top: 12px;">
+        <div class="field">
+          <label for="scheme">Select Class Scheme</label>
+          <select id="scheme" name="scheme">
+            {% for s in scheme_options %}
+              <option value="{{ s }}" {% if form.scheme == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="batch">Select Class Batch (0 for all batches)</label>
+          <input id="batch" name="batch" type="number" min="0" max="33" step="1" value="{{ form.batch }}">
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <button type="submit" name="do" value="1" class="btn">
+          <span class="material-symbols-rounded">search</span>
+          Search Students
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if searched %}
+    {% if rows %}
+      <h2>Results ({{ rows|length }})</h2>
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Roll Number</th>
+              <th>Student Name</th>
+              <th>Section</th>
+              <th>Course</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+              <tr>
+                <td>{{ r["Roll Number"] }}</td>
+                <td>{{ r["Student Name"] }}</td>
+                <td>{{ r["Section"] }}</td>
+                <td>{{ r["Course"] }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert error">
+        Oops! Looks like there's no student information for that criteria.
+      </div>
+    {% endif %}
+  {% endif %}
+{% endblock %}
