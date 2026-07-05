@@ -2,22 +2,16 @@
 {% block title %}Students &middot; KIIT Archive{% endblock %}
 {% block content %}
   <h1>Student Archive</h1>
-  <p class="caption">We only contain student data of 2024-25 admitted students.</p>
+  <p class="caption">
+    Data is only available for the <strong>2024-28 admitted cohort</strong>
+    &mdash; {{ "{:,}".format(student_count) }} students on record.
+  </p>
 
   <div class="panel">
-    <h2>Filters</h2>
-    <form method="get" action="{{ url_for('students.index') }}">
+    <form method="get" action="{{ url_for('students.index') }}" id="filters">
       <div class="form-row">
         <div class="field">
-          <label for="year">Select Academic Year of Admission</label>
-          <select id="year" name="year">
-            {% for y in year_options %}
-              <option value="{{ y }}" {% if form.year == y %}selected{% endif %}>{{ y }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label for="course">Select B.Tech Course</label>
+          <label for="course">Course</label>
           <select id="course" name="course">
             <option value="Anything" {% if form.course == 'Anything' %}selected{% endif %}>Anything</option>
             {% for c in course_choices %}
@@ -26,38 +20,105 @@
           </select>
         </div>
         <div class="field">
-          <label for="name">Name Filter (empty for all names)</label>
-          <input id="name" name="name" type="text" value="{{ form.name }}" placeholder="">
+          <label for="q">Name contains</label>
+          <input id="q" name="q" type="search" value="{{ form.q }}" placeholder="e.g. Aaryan">
+        </div>
+        <div class="field">
+          <label for="roll">Roll number contains</label>
+          <input id="roll" name="roll" type="search" value="{{ form.roll }}" placeholder="e.g. 2405">
         </div>
       </div>
 
-      <div class="form-row two" style="margin-top: 12px;">
+      <div class="form-row three" style="margin-top: 12px;">
         <div class="field">
-          <label for="scheme">Select Class Scheme</label>
+          <label for="scheme">Scheme</label>
           <select id="scheme" name="scheme">
             {% for s in scheme_options %}
-              <option value="{{ s }}" {% if form.scheme == s %}selected{% endif %}>{{ s }}</option>
+              <option value="{{ s }}" {% if form.scheme == s %}selected{% endif %}>{{ s.upper() if s != 'both' else 'Both A &amp; B' }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="field">
-          <label for="batch">Select Class Batch (0 for all batches)</label>
+          <label for="batch">Batch (0 = all)</label>
           <input id="batch" name="batch" type="number" min="0" max="33" step="1" value="{{ form.batch }}">
+        </div>
+        <div class="field">
+          <label for="size">Results per page</label>
+          <select id="size" name="size">
+            {% for n in page_sizes %}
+              <option value="{{ n }}" {% if form.page_size == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
         </div>
       </div>
 
-      <div style="margin-top: 16px;">
-        <button type="submit" name="do" value="1" class="btn">
+      <div style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="submit" class="btn">
           <span class="material-symbols-rounded">search</span>
-          Search Students
+          Search
         </button>
+        <a class="btn secondary" href="{{ url_for('students.index') }}">
+          <span class="material-symbols-rounded">restart_alt</span>
+          Reset
+        </a>
+        {% if active_chips %}
+          <a class="btn ghost" href="{{ url_for('students.export', **form) }}">
+            <span class="material-symbols-rounded">download</span>
+            Export {{ total }} row{{ '' if total == 1 else 's' }} as CSV
+          </a>
+        {% endif %}
       </div>
     </form>
   </div>
 
-  {% if searched %}
-    {% if rows %}
-      <h2>Results ({{ rows|length }})</h2>
+  {% if active_chips %}
+    <div class="panel" style="margin-top: 16px;">
+      <h3 style="margin-top: 0;">Active filters</h3>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        {% for label, value, clear_param in active_chips %}
+          {% set cleared = form.copy() %}
+          {% set _ = cleared.update({clear_param: ''}) %}
+          <a class="chip"
+             href="{{ url_for('students.index', **cleared) }}"
+             title="Remove this filter">
+            <span class="chip-label">{{ label }}:</span>
+            <span class="chip-value">{{ value }}</span>
+            <span class="material-symbols-rounded chip-close">close</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if is_filtered %}
+    {% if total %}
+      <div class="results-bar">
+        <h2>
+          {{ "{:,}".format(total) }}
+          result{{ '' if total == 1 else 's' }}
+        </h2>
+
+        <form method="get" action="{{ url_for('students.index') }}" class="sort-form">
+          {% for k, v in form.items() %}
+            {% if k not in ('sort', 'dir', 'page') %}
+              <input type="hidden" name="{{ k }}" value="{{ v }}">
+            {% endif %}
+          {% endfor %}
+          <div class="field" style="flex-direction: row; align-items: center; gap: 6px;">
+            <label for="sort" style="margin: 0;">Sort by</label>
+            <select id="sort" name="sort" onchange="this.form.submit()">
+              {% for key, label in sort_keys.items() %}
+                <option value="{{ key }}" {% if form.sort == key %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <select id="dir" name="dir" onchange="this.form.submit()">
+              <option value="asc" {% if form.direction == 'asc' %}selected{% endif %}>Ascending</option>
+              <option value="desc" {% if form.direction == 'desc' %}selected{% endif %}>Descending</option>
+            </select>
+          </div>
+        </form>
+      </div>
+
       <div class="table-wrap">
         <table class="data">
           <thead>
@@ -69,21 +130,108 @@
             </tr>
           </thead>
           <tbody>
-            {% for r in rows %}
+            {% for s in rows %}
               <tr>
-                <td>{{ r["Roll Number"] }}</td>
-                <td>{{ r["Student Name"] }}</td>
-                <td>{{ r["Section"] }}</td>
-                <td>{{ r["Course"] }}</td>
+                <td>{{ s.roll }}</td>
+                <td>{{ s.name }}</td>
+                <td>{{ s.section }}</td>
+                <td>{{ s.course }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+
+      {% if pages > 1 %}
+        {% set base_args = form.copy() %}
+        {% set _ = base_args.pop('page', None) %}
+        <nav class="pagination" aria-label="Results pages">
+          {% if page > 1 %}
+            {% set prev_args = base_args.copy() %}{% set _ = prev_args.update({'page': page - 1}) %}
+            <a class="page-link" href="{{ url_for('students.index', **prev_args) }}">
+              <span class="material-symbols-rounded">chevron_left</span>
+              Prev
+            </a>
+          {% else %}
+            <span class="page-link disabled" aria-disabled="true">
+              <span class="material-symbols-rounded">chevron_left</span>
+              Prev
+            </span>
+          {% endif %}
+          <span class="page-info">Page {{ page }} of {{ pages }}</span>
+          {% if page < pages %}
+            {% set next_args = base_args.copy() %}{% set _ = next_args.update({'page': page + 1}) %}
+            <a class="page-link" href="{{ url_for('students.index', **next_args) }}">
+              Next
+              <span class="material-symbols-rounded">chevron_right</span>
+            </a>
+          {% else %}
+            <span class="page-link disabled" aria-disabled="true">
+              Next
+              <span class="material-symbols-rounded">chevron_right</span>
+            </span>
+          {% endif %}
+        </nav>
+      {% endif %}
+
+      {% if facets.course or facets.section %}
+        <details class="panel" style="margin-top: 16px;" {% if total < 50 %}open{% endif %}>
+          <summary>Results breakdown ({{ "{:,}".format(total) }} matches)</summary>
+          <div class="facet-grid">
+            {% if facets.course %}
+              <div>
+                <h3>By course</h3>
+                <table class="data">
+                  <thead><tr><th>Course</th><th>Count</th></tr></thead>
+                  <tbody>
+                    {% for name, count in facets.course %}
+                      <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+            {% if facets.section %}
+              <div>
+                <h3>By section</h3>
+                <table class="data">
+                  <thead><tr><th>Section</th><th>Count</th></tr></thead>
+                  <tbody>
+                    {% for name, count in facets.section %}
+                      <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% endif %}
+          </div>
+        </details>
+      {% endif %}
     {% else %}
       <div class="alert error">
-        Oops! Looks like there's no student information for that criteria.
+        No students match these filters. Try widening the course or scheme.
       </div>
     {% endif %}
+  {% else %}
+    <div class="panel" style="margin-top: 16px;">
+      <div class="empty-state" style="padding: 16px 0;">
+        <span class="material-symbols-rounded big">filter_alt</span>
+        <p>Set at least one filter above to search the {{ "{:,}".format(student_count) }} students on record.</p>
+        {% if facets.course %}
+          <details style="text-align: left; margin-top: 16px;">
+            <summary>Available courses in this cohort</summary>
+            <ul style="columns: 2;">
+              {% for name, count in facets.course %}
+                {% set args = form.copy() %}{% set _ = args.update({'course': name}) %}
+                <li>
+                  <a href="{{ url_for('students.index', **args) }}">{{ name }}</a>
+                  &mdash; {{ count }}
+                </li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% endif %}
+      </div>
+    </div>
   {% endif %}
 {% endblock %}
