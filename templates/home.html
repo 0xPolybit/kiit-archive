@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}KIIT Archive{% endblock %}
+{% block content %}
+  <h1>Public KIIT Archive<span style="color: var(--accent)">*</span></h1>
+  <p class="caption">*Unofficial, but all data is provided by public KIIT University documents.</p>
+
+  <div class="home-grid">
+    {% for endpoint, icon, title, desc in cards %}
+      <a class="home-card" href="{{ url_for(endpoint) }}">
+        <span class="material-symbols-rounded">{{ icon }}</span>
+        <h3>{{ title }}</h3>
+        <p>{{ desc }}</p>
+      </a>
+    {% endfor %}
+  </div>
+
+  <p style="margin-top: 32px;">
+    <a class="btn secondary" href="https://github.com/PolybitRockzz/" target="_blank" rel="noopener">
+      <span class="material-symbols-rounded">code</span>
+      Who made this?
+    </a>
+  </p>
+{% endblock %}

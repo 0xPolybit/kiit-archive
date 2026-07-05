@@ -1,16 +1,45 @@
-import streamlit as st
+"""KIIT Archive — Flask entry point.
+
+Replaces the previous Streamlit multi-page app. Each "tab" is now a
+Flask blueprint under tabs/ rendered through Jinja2 templates under
+templates/.
+"""
+
 import os
 
-if os.name == 'nt':
-    filediff = '\\'
-else:
-    filediff = '/'
+from flask import Flask, render_template
 
-home_page = st.Page(f"tabs{filediff}home.py", title="Home", icon=":material/home:")
-students_page = st.Page(f"tabs{filediff}students.py", title="Students", icon=":material/person:")
-pyqs_page = st.Page(f"tabs{filediff}pyqs.py", title="PYQs", icon=":material/archive:")
-terms_page = st.Page(f"tabs{filediff}terms.py", title="Terms", icon=":material/list:")
+from tabs import (
+    books_bp,
+    courses_bp,
+    gpa_calc_bp,
+    home_bp,
+    pyqs_bp,
+    students_bp,
+    terms_bp,
+)
 
-pg = st.navigation([home_page, students_page, pyqs_page, terms_page])
-st.set_page_config(page_title="KIIT Archive", page_icon=":material/archive:")
-pg.run()
+
+def create_app() -> Flask:
+    app = Flask(__name__, static_folder="static", template_folder="templates")
+
+    app.register_blueprint(home_bp)
+    app.register_blueprint(students_bp, url_prefix="/students")
+    app.register_blueprint(pyqs_bp, url_prefix="/pyqs")
+    app.register_blueprint(books_bp, url_prefix="/books")
+    app.register_blueprint(gpa_calc_bp, url_prefix="/gpa-calculator")
+    app.register_blueprint(courses_bp, url_prefix="/courses")
+    app.register_blueprint(terms_bp, url_prefix="/terms")
+
+    @app.errorhandler(404)
+    def not_found(_e):
+        return render_template("404.html"), 404
+
+    return app
+
+
+app = create_app()
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
