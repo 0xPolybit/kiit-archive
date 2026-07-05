@@ -1,78 +1,148 @@
-import streamlit as st
-import os
-import re
+"""PYQs tab — locate a past-year paper PDF and its scanned pages.
 
-def get_substr(string):
+The lookup is metadata-driven: `pyqs/subjects.json` lists subjects per
+semester; `pyqs/pyqs.json` holds one record per uploaded paper with a
+file-code prefix that is used to glob the actual PDF + JPGs from the
+pyqs/ directory.
+"""
+
+import glob
+import json
+import os
+
+from flask import Blueprint, abort, current_app, render_template, request, send_file, url_for
+
+pyqs_bp = Blueprint("pyqs", __name__)
+
+
+YEAR_OPTIONS = ["2024-25"]
+SEMESTER_OPTIONS = ["Semester 1", "Semester 2"]
+CONTRIBUTE_URL = (
+    "https://docs.google.com/forms/d/e/1FAIpQLSfELG83aiBPhSVmuKrq6JtwhVl0eM4wEmp0PquhlD2wAklTPw/viewform"
+    "?usp=sf_link"
+)
+
+
+def _exam_options_for(semester_index: int) -> list[str]:
+    # Semester 1 (Autumn) and Semester 2 (Spring) get the matching
+    # mid/end-semester names. The Streamlit version key off semester
+    # number, so do we.
+    if semester_index % 2 == 0:
+        return ["Mid Semester (Spring)", "End Semester (Summer)"]
+    return ["Mid Semester (Autumn)", "End Semester (Winter)"]
+
+
+def _get_substr(string: str) -> str:
+    # Same comparator the Streamlit tab uses to sort subjects.
     return string[-8:-1]
 
-course_codes = [
-    "Creativity, Innovation and Entrepreneurship [PS10045]",
-    "Physics [PH10001]",
-    "Differential Equations and Linear Algebra [MA11001]",
-    "Optimization Technique [MA10003]",
-    "Science of Living System [LS10001]",
-    "English [HS10001]",
-    "Basic Instrumentation [EE10003]",
-    "Basic Electrical Engineering [EE10002]",
-    "Basic Electronics [EC10001]",
-    "Environmental Sciences [CH10003]",
-    "Chemistry [CH10001]",
-    "Basic Civil Engineering [CE10001]",
-    "Basic Mechanical Engineering [ME10003]",
-    "Elements of Machine Learning [EE10001]",
-    "Bio Medical Engineering [EC10003]",
-    "Nano Science [CH10005]",
-    "Smart Materials [PH10003]",
-    "Molecular Diagonistics [LS10003]",
-    "Science of Public Health [PE10002]",
-    "Society, Science and Technology [HS10013]",
-    "Community/Environment Based Project [EX17001]",
-    "Essentials of Management [HS10202]"
-]
-course_codes.sort(key=get_substr)
 
-st.title("PYQs Archive")
+def _load_subjects(semester_index: int) -> list[str]:
+    path = os.path.join(current_app.root_path, "pyqs", "subjects.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    subjects = data[semester_index - 1]
+    subjects.sort(key=_get_substr)
+    return subjects
 
-st.caption("We only contain examination data since the 2024-25 academic year.")
 
-st.subheader("Filters")
+def _load_pyqs() -> list[dict]:
+    path = os.path.join(current_app.root_path, "pyqs", "pyqs.json")
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    year_options = st.selectbox("Select Academic Year", ("2024-25"), index=0)
-with col2:
-    semester_options = st.selectbox("Select Semester", ("Semester 1"), index=0)
-course_options = year_options + " " + semester_options
-with col3:
-    if int(course_options[-1]) % 2 == 0:
-        exam_options = st.selectbox("Select Exam", ("Mid Semester (Spring)", "End Semester (Summer)"), index=0)
-    else:
-        exam_options = st.selectbox("Select Exam", ("Mid Semester (Autumn)", "End Semester (Winter)"), index=0)
-subject_options = st.selectbox("Select Subject", course_codes, index=0)
-do_it = st.button("Search for PYQ")
 
-if do_it:
-    pdf_file = None
-    credits = ""
-    jpg_files = []
-    files = [f for f in os.listdir("pyqs") if os.path.isfile(os.path.join("pyqs", f))]
-    for file in files:
-        if (subject_options[-8:-1] in file) and (exam_options[0:3] in file) and (course_options[0:4] in file):
-            if file.endswith(".pdf"):
-                pdf_file = file
-                credits = file[-12:-4]
-            elif file.endswith(".jpg"):
-                jpg_files.append(file)
-    if pdf_file is None or len(jpg_files) == 0:
-        st.error("Oops! Looks like we do not have that specific PYQ yet.")
-    else:
-        st.subheader("Results")
-        jpg_files.sort()
-        col3, col4 = st.columns(2)
-        with col3:
-            for jpg_file in jpg_files:
-                st.image(f"pyqs/{jpg_file}", caption=f"Page {jpg_file[-5:-4]}", use_column_width=True)
-        with col4:
-            st.markdown("**PDF File:** " + pdf_file)
-            st.download_button(label="Download PDF", data=open(f"pyqs/{pdf_file}", "rb").read(), file_name=pdf_file)
-            st.markdown("**Credits to who shared this:** " + credits)
+def _find_pyq(pyqs, year, subject, exam, semester_index):
+    for pyq in pyqs:
+        if (
+            pyq.get("academic-year") == year
+            and subject in pyq.get("subject-code", "")
+            and pyq.get("exam") == exam
+            and pyq.get("semester") == semester_index
+        ):
+            return pyq
+    return None
+
+
+@pyqs_bp.route("/", methods=["GET"])
+def index():
+    year = request.args.get("year", YEAR_OPTIONS[0])
+    semester = request.args.get("semester", SEMESTER_OPTIONS[0])
+    semester_index = int(semester[-1])
+    exam = request.args.get("exam", _exam_options_for(semester_index)[0])
+
+    subjects = _load_subjects(semester_index)
+    subject = request.args.get("subject") or (subjects[0] if subjects else "")
+
+    result = None
+    error = None
+    pdf_url = None
+    pages = []
+    credits = None
+
+    if request.args.get("do") and subject:
+        pyqs = _load_pyqs()
+        match = _find_pyq(pyqs, year, subject, exam, semester_index)
+        if not match:
+            error = "missing"
+        else:
+            file_code = match["file"]
+            credits = match.get("credit", "anonymous")
+            files = glob.glob(os.path.join(current_app.root_path, "pyqs", f"{file_code}*"))
+            pdf_file = next((f for f in files if f.endswith(".pdf")), None)
+            pages = sorted(f for f in files if f.endswith(".jpg"))
+            if not pdf_file or not pages:
+                error = "missing"
+            else:
+                pdf_url = url_for("pyqs.download", code=os.path.basename(pdf_file))
+                result = {"subject": subject, "exam": exam, "credits": credits}
+
+    return render_template(
+        "pyqs.html",
+        year_options=YEAR_OPTIONS,
+        semester_options=SEMESTER_OPTIONS,
+        exam_options=_exam_options_for(semester_index),
+        subjects=subjects,
+        form={
+            "year": year,
+            "semester": semester,
+            "exam": exam,
+            "subject": subject,
+        },
+        result=result,
+        pages=pages,
+        pdf_url=pdf_url,
+        credits=credits,
+        error=error,
+        contribute_url=CONTRIBUTE_URL,
+    )
+
+
+def _safe_under_pyqs(filename: str) -> str | None:
+    # Disallow path traversal — only allow simple basenames.
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        return None
+    path = os.path.join(current_app.root_path, "pyqs", filename)
+    if not os.path.isfile(path):
+        return None
+    return path
+
+
+@pyqs_bp.route("/download/<path:code>")
+def download(code):
+    path = _safe_under_pyqs(code)
+    if path is None or not path.lower().endswith(".pdf"):
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=os.path.basename(path))
+
+
+@pyqs_bp.route("/image/<path:filename>")
+def image(filename):
+    path = _safe_under_pyqs(filename)
+    if path is None or not path.lower().endswith(".jpg"):
+        abort(404)
+    return send_file(path, mimetype="image/jpeg")

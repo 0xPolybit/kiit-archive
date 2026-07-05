@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}PYQs &middot; KIIT Archive{% endblock %}
+{% block content %}
+  <h1>PYQs Archive</h1>
+  <p class="caption">We only contain examination data since the 2024-25 academic year.</p>
+
+  <div class="panel">
+    <h2>Filters</h2>
+    <form method="get" action="{{ url_for('pyqs.index') }}">
+      <div class="form-row three">
+        <div class="field">
+          <label for="year">Select Academic Year</label>
+          <select id="year" name="year">
+            {% for y in year_options %}
+              <option value="{{ y }}" {% if form.year == y %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="semester">Select Semester</label>
+          <select id="semester" name="semester" onchange="this.form.submit()">
+            {% for s in semester_options %}
+              <option value="{{ s }}" {% if form.semester == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="exam">Select Exam</label>
+          <select id="exam" name="exam">
+            {% for e in exam_options %}
+              <option value="{{ e }}" {% if form.exam == e %}selected{% endif %}>{{ e }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top: 12px;">
+        <div class="field">
+          <label for="subject">Select Subject</label>
+          <select id="subject" name="subject">
+            {% for s in subjects %}
+              <option value="{{ s }}" {% if form.subject == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <button type="submit" name="do" value="1" class="btn">
+          <span class="material-symbols-rounded">search</span>
+          Search for PYQ
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if error == 'missing' %}
+    <div class="alert error">
+      Oops! Looks like we do not have that specific PYQ yet.
+    </div>
+    <p>
+      <a class="btn secondary" href="{{ contribute_url }}" target="_blank" rel="noopener">
+        <span class="material-symbols-rounded">upload</span>
+        Contribute
+      </a>
+    </p>
+  {% endif %}
+
+  {% if result %}
+    <h2>Results</h2>
+    <div class="pyq-grid">
+      <div>
+        {% for page in pages %}
+          {% set page_name = page.split('/')[-1] %}
+          <figure class="pyq-page">
+            <img src="{{ url_for('pyqs.image', filename=page_name) }}"
+                 alt="Page {{ loop.index }}">
+            <figcaption style="text-align:center; font-size:0.85rem; color: var(--muted); margin-top: 4px;">
+              Page {{ loop.index }}
+            </figcaption>
+          </figure>
+        {% endfor %}
+      </div>
+      <div class="panel">
+        <h3>Download</h3>
+        <p><strong>PDF File:</strong> {{ pdf_url }}</p>
+        <a class="btn" href="{{ pdf_url }}">
+          <span class="material-symbols-rounded">download</span>
+          Download PDF
+        </a>
+        <h3 style="margin-top: 16px;">Credits</h3>
+        <p>Shared by <strong>{{ credits }}</strong>.</p>
+        <p>
+          <a class="btn secondary" href="{{ contribute_url }}" target="_blank" rel="noopener">
+            <span class="material-symbols-rounded">upload</span>
+            Contribute more
+          </a>
+        </p>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
