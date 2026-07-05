@@ -1,9 +1,10 @@
-import streamlit as st
+"""Terms tab — Terms & Conditions markdown."""
 
-st.title("Terms")
+from flask import Blueprint, render_template
 
-st.markdown("""
-- The existance of this website does not intend to harm anyone or infringe upon any individual's privacy.
-- All data hereby displayed is availed via public documents by KIIT University.
-- No sensitive information, or information that can be deemed to provoke "stalking" behaviour are not displayed, nor stored in our database.
-""")
+terms_bp = Blueprint("terms", __name__)
+
+
+@terms_bp.route("/", methods=["GET"])
+def index():
+    return render_template("terms.html")
