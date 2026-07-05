@@ -45,6 +45,17 @@ html, body {
   line-height: 1.5;
 }
 
+/* Full-height flex column so the footer sits at the bottom of the
+   viewport (or below the content when content is taller than the
+   viewport) instead of leaving a white strip of background underneath. */
+html { min-height: 100%; }
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+main.container { flex: 1 0 auto; }
+
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
