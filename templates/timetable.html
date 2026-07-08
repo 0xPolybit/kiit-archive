@@ -132,13 +132,14 @@
                   </thead>
                   <tbody>
                     {% for label, start in view.periods %}
+                      {% set period_idx = loop.index0 %}
                       <tr>
                         <th class="period">
                           {{ label }}<br>
                           <span class="muted-text">{{ start }}</span>
                         </th>
                         {% for day in view.days %}
-                          {% set slot = view.schedule[day][loop.index0] %}
+                          {% set slot = view.schedule[day][period_idx] %}
                           <td class="{% if day == view.today %}today{% endif %} {% if slot.is_empty %}empty{% endif %}">
                             {% if not slot.is_empty %}
                               <div class="slot-course">{{ slot.course }}</div>
