@@ -142,6 +142,8 @@ def _search(app_root: str, q: str) -> tuple[list[Match], str]:
 def index():
     app_root = current_app.root_path
     q = request.args.get("q", "").strip()
+    combine = request.args.get("combine", "").strip().lower() in ("1", "true", "yes")
+
     matches: list[Match] = []
     note = ""
     if q:
@@ -149,16 +151,27 @@ def index():
 
     match_views = []
     for m in matches:
+        core = _schedule_for_section(app_root, m.core_section)
+        pe1 = _schedule_for_section(app_root, m.pe1_section)
+        pe2 = _schedule_for_section(app_root, m.pe2_section)
+        # Order matches the split view: Core first, then PE1, PE2.
+        sections = [
+            ("Core", "core", core, m.core_section),
+            ("PE1",  "pe1",  pe1,  m.pe1_section),
+            ("PE2",  "pe2",  pe2,  m.pe2_section),
+        ]
         match_views.append({
             "match": m,
-            "core": _schedule_for_section(app_root, m.core_section),
-            "pe1": _schedule_for_section(app_root, m.pe1_section),
-            "pe2": _schedule_for_section(app_root, m.pe2_section),
+            "core": core,
+            "pe1": pe1,
+            "pe2": pe2,
+            "sections": sections,
         })
 
     return render_template(
         "timetable.html",
         q=q,
+        combine=combine,
         note=note,
         today=today_name(),
         weekday_index=date.today().weekday(),
