@@ -67,4 +67,8 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    # When invoked under gunicorn (Render, Heroku, etc.) the
+    # `__main__` block never runs, so this only affects `python app.py`.
+    # On Render / production hosts, never enable debug.
+    debug = not bool(os.environ.get("RENDER") or os.environ.get("DYNO"))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=debug)

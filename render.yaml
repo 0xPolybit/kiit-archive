@@ -1,0 +1,26 @@
+# Render blueprint — one command deploys the whole service.
+#
+#   1. Push this repo to GitHub (already done).
+#   2. In the Render dashboard, click "New" -> "Blueprint",
+#      point it at this repository, and accept the plan.
+#   Render reads this file and creates the web service with the
+#   correct build / start commands and environment variables.
+#
+# Local override: pass --render 0 / --workers 1 to scale down for
+# cheap hobby deployments. The Procfile is what Render actually runs.
+
+services:
+  - type: web
+    name: kiit-archive
+    runtime: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
+    autoDeploy: true
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: KIIT_ARCHIVE_SECRET
+        generateValue: true

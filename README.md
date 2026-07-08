@@ -136,19 +136,46 @@ python app.py
 
 The app starts on `http://localhost:5000` by default.
 
+## Deploy to Render
+
+The repo is ready to ship with a [Render Blueprint](https://render.com/docs/blueprint-spec).
+
+1. Sign in to [render.com](https://render.com) with your GitHub account.
+2. Click **New → Blueprint**, point it at `0xPolybit/kiit-archive`.
+3. Render reads [`render.yaml`](render.yaml) and creates the `kiit-archive`
+   web service. It will:
+   - pin Python to the version in [`runtime.txt`](runtime.txt),
+   - install deps from `requirements.txt`,
+   - run [`Procfile`](Procfile) under gunicorn,
+   - generate a secure `KIIT_ARCHIVE_SECRET` for you.
+4. After the first deploy, every push to `main` triggers an auto-deploy.
+
+Manual deploy (without the blueprint):
+
+| Setting | Value |
+| --- | --- |
+| Runtime | Python |
+| Build command | `pip install --upgrade pip && pip install -r requirements.txt` |
+| Start command | `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120` |
+| Health check path | `/` |
+| Env var `PYTHONUNBUFFERED` | `true` |
+| Env var `KIIT_ARCHIVE_SECRET` | a random 32-byte hex string |
+
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `5000` | Port the dev server binds to |
+| `RENDER` | _(unset)_ | When set, `python app.py` runs without debug |
+| `DYNO` | _(unset)_ | Same as `RENDER`, for Heroku compatibility |
 | `KIIT_ARCHIVE_SECRET` | `dev-only-change-me` | Flask session signing key — **set this in production** |
 
-Example:
+Example (local production-like run):
 
 ```bash
 export PORT=8080
 export KIIT_ARCHIVE_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-python app.py
+gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 ```
 
 ## Usage
