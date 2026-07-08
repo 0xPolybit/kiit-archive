@@ -146,20 +146,27 @@ The repo is ready to ship with a [Render Blueprint](https://render.com/docs/blue
    web service. It will:
    - pin Python to the version in [`runtime.txt`](runtime.txt),
    - install deps from `requirements.txt`,
-   - run [`Procfile`](Procfile) under gunicorn,
+   - run [`gunicorn.conf.py`](gunicorn.conf.py) under gunicorn,
    - generate a secure `KIIT_ARCHIVE_SECRET` for you.
 4. After the first deploy, every push to `main` triggers an auto-deploy.
 
-Manual deploy (without the blueprint):
+Manual deploy (without the blueprint): use Render's **Web Service** type
+and pick "Python" as the runtime. Render's default start command
+(`gunicorn -c gunicorn.conf.py app:app`) is what we use, so the only
+required env vars are listed below.
 
 | Setting | Value |
 | --- | --- |
 | Runtime | Python |
 | Build command | `pip install --upgrade pip && pip install -r requirements.txt` |
-| Start command | `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120` |
+| Start command | `gunicorn -c gunicorn.conf.py app:app` |
 | Health check path | `/` |
 | Env var `PYTHONUNBUFFERED` | `true` |
 | Env var `KIIT_ARCHIVE_SECRET` | a random 32-byte hex string |
+
+All gunicorn settings (bind, workers, timeout, access-log, …) live in
+[`gunicorn.conf.py`](gunicorn.conf.py) and can be overridden by
+environment variables.
 
 ## Configuration
 
@@ -175,7 +182,7 @@ Example (local production-like run):
 ```bash
 export PORT=8080
 export KIIT_ARCHIVE_SECRET="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+gunicorn -c gunicorn.conf.py app:app
 ```
 
 ## Usage
