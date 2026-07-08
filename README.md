@@ -59,6 +59,9 @@ The project intentionally:
 - 🧑‍🎓 **Student directory** — paginated, sortable search over the
   2024-28 admitted cohort with name, roll-number, course, scheme, and
   batch filters; CSV export; faceted breakdown of results.
+- 📅 **Timetable** — look up any student by roll, name, or section
+  code to see their **core + PE1 + PE2** weekly schedule side-by-side,
+  with the current day highlighted.
 - 📚 **Previous-year questions (PYQs)** — metadata-driven lookup of
   past papers and scanned pages with PDF downloads.
 - 📖 **Books archive** — search box stub awaiting catalog integration.
@@ -99,6 +102,9 @@ kiit-archive/
 │   └── style.css           # design system, dark-theme overrides
 ├── students/               # 2024students.csv + per-section CSVs
 ├── pyqs/                   # papers + subjects.json + pyqs.json (when populated)
+├── timetable/              # 5th-semester XLSX data (core + elective)
+│   ├── Section detail_5th.xlsx
+│   └── 5th_Semester_timetable_core_elective_student.xlsx
 └── books/                  # reserved for future catalog
 ```
 

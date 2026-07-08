@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block title %}Timetable &middot; KIIT Archive{% endblock %}
+{% block content %}
+  <h1>Timetable Lookup</h1>
+  <p class="caption">
+    Search by <strong>roll number</strong>, <strong>name</strong>, or
+    <strong>section code</strong> (e.g., <code>CS17</code>).
+    Today's column is highlighted across every schedule.
+  </p>
+
+  <div class="panel">
+    <form method="get" action="{{ url_for('timetable.index') }}">
+      <div class="form-row">
+        <div class="field">
+          <label for="q">Identifier</label>
+          <input id="q" name="q" type="search" value="{{ q }}"
+                 placeholder="2405001  &middot;  Aaryan  &middot;  CS17" autofocus>
+        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <button type="submit" class="btn">
+          <span class="material-symbols-rounded">search</span>
+          Search
+        </button>
+        <a class="btn secondary" href="{{ url_for('timetable.index') }}">
+          <span class="material-symbols-rounded">restart_alt</span>
+          Reset
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {% if searched and not matches %}
+    <div class="alert error" style="margin-top: 16px;">
+      No students matched &ldquo;<strong>{{ q }}</strong>&rdquo;.
+      Try a different roll, name, or section code.
+    </div>
+  {% endif %}
+
+  {% if note %}
+    <div class="alert" style="margin-top: 16px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent);">
+      {{ note }}
+    </div>
+  {% endif %}
+
+  {% for mv in matches %}
+    {% set m = mv.match %}
+    <div class="match-card" style="margin-top: 24px;">
+      <div class="panel">
+        <div class="match-head">
+          <div>
+            <h2 style="margin: 0 0 4px;">
+              {% if m.student %}
+                {{ m.student.name }}
+              {% else %}
+                <span class="muted-text">Unknown student</span>
+              {% endif %}
+            </h2>
+            <div class="match-meta">
+              <span class="meta-chip">
+                <span class="material-symbols-rounded">id_card</span>
+                {{ m.roll }}
+              </span>
+              {% if m.student %}
+                <span class="meta-chip">
+                  <span class="material-symbols-rounded">school</span>
+                  {{ m.student.course }}
+                </span>
+                <span class="meta-chip">
+                  <span class="material-symbols-rounded">workspaces</span>
+                  Scheme {{ m.student.scheme }} &middot; Batch {{ "%02d"|format(m.student.batch) }}
+                </span>
+              {% endif %}
+              {% if m.core_section %}
+                <span class="meta-chip accent">
+                  <span class="material-symbols-rounded">bookmark</span>
+                  Core: {{ m.core_section }}
+                </span>
+              {% endif %}
+              {% if m.pe1_section %}
+                <span class="meta-chip accent">
+                  <span class="material-symbols-rounded">bookmark</span>
+                  PE1: {{ m.pe1_section }}
+                </span>
+              {% endif %}
+              {% if m.pe2_section %}
+                <span class="meta-chip accent">
+                  <span class="material-symbols-rounded">bookmark</span>
+                  PE2: {{ m.pe2_section }}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+          {% if m.student is none %}
+            <div class="muted-text" style="font-size: 0.85rem;">
+              This roll is in the 5th-semester schedule but not in the
+              2024-admitted cohort CSV. Course and scheme are unknown.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="timetable-grid">
+        {% set sections = [
+          ('Core', mv.core, m.core_section),
+          ('PE1',  mv.pe1,  m.pe1_section),
+          ('PE2',  mv.pe2,  m.pe2_section),
+        ] %}
+        {% for label, view, code in sections %}
+          <div class="panel timetable-panel">
+            <h3>
+              {{ label }}
+              {% if code %}
+                <span class="section-pill">{{ code }}</span>
+              {% else %}
+                <span class="muted-text">&mdash; not assigned</span>
+              {% endif %}
+            </h3>
+            {% if code and view.schedule %}
+              <div class="table-wrap">
+                <table class="data timetable">
+                  <thead>
+                    <tr>
+                      <th>Period</th>
+                      {% for day in view.days %}
+                        <th class="{% if day == view.today %}today{% endif %}">
+                          {{ day }}
+                          {% if day == view.today %}<span class="today-pill">Today</span>{% endif %}
+                        </th>
+                      {% endfor %}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for label, start in view.periods %}
+                      <tr>
+                        <th class="period">
+                          {{ label }}<br>
+                          <span class="muted-text">{{ start }}</span>
+                        </th>
+                        {% for day in view.days %}
+                          {% set slot = view.schedule[day][loop.index0] %}
+                          <td class="{% if day == view.today %}today{% endif %} {% if slot.is_empty %}empty{% endif %}">
+                            {% if not slot.is_empty %}
+                              <div class="slot-course">{{ slot.course }}</div>
+                              {% if slot.faculty %}<div class="slot-faculty">{{ slot.faculty }}</div>{% endif %}
+                              {% if slot.room %}<div class="slot-room">{{ slot.room }}</div>{% endif %}
+                            {% endif %}
+                          </td>
+                        {% endfor %}
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="empty-state" style="padding: 24px 8px;">
+                <span class="material-symbols-rounded">event_busy</span>
+                <p>No schedule found for this section.</p>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  {% if not searched %}
+    <div class="panel" style="margin-top: 16px;">
+      <h3>What can I search?</h3>
+      <ul style="margin: 0; padding-left: 1.2rem;">
+        <li><strong>Roll number</strong> &mdash; exact match or prefix
+            (e.g., <code>2405001</code>).</li>
+        <li><strong>Name</strong> &mdash; substring match
+            (e.g., <code>Aaryan</code>).</li>
+        <li><strong>Section code</strong> &mdash; returns every student
+            in that section
+            (e.g., <code>CS17</code> finds the core section,
+            <code>IPA17</code> finds everyone in that elective).</li>
+      </ul>
+      <p class="muted-text" style="margin: 12px 0 0; font-size: 0.85rem;">
+        Dataset: {{ "{:,}".format(stats.core_rolls) }} core assignments,
+        {{ "{:,}".format(stats.elective_rolls) }} elective assignments,
+        {{ "{:,}".format(stats.sections_in_schedule) }} sections.
+      </p>
+    </div>
+  {% endif %}
+{% endblock %}

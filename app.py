@@ -17,6 +17,7 @@ from tabs import (
     pyqs_bp,
     students_bp,
     terms_bp,
+    timetable_bp,
 )
 
 
@@ -36,6 +37,7 @@ def create_app() -> Flask:
     app.register_blueprint(gpa_calc_bp, url_prefix="/gpa-calculator")
     app.register_blueprint(courses_bp, url_prefix="/courses")
     app.register_blueprint(terms_bp, url_prefix="/terms")
+    app.register_blueprint(timetable_bp, url_prefix="/timetable")
 
     @app.errorhandler(404)
     def not_found(_e):

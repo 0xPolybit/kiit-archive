@@ -8,6 +8,8 @@ home_bp = Blueprint("home", __name__)
 CARDS = [
     ("students.index", "person", "Students",
      "Search and filter for publicly available data on students."),
+    ("timetable.index", "today", "Timetable",
+     "Look up any student by roll, name, or section to see their weekly timetable."),
     ("pyqs.index", "archive", "PYQs",
      "Search and filter for publicly available PYQs."),
     ("books.index", "menu_book", "Books",

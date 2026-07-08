@@ -348,6 +348,90 @@ table.data tbody tr:hover { background: var(--row-hover); }
   margin-top: 12px;
 }
 .facet-grid h3 { margin-top: 0; }
+
+/* Timetable */
+.muted-text { color: var(--muted); }
+.match-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.match-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--thead-bg);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.meta-chip.accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.meta-chip .material-symbols-rounded { font-size: 14px; }
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+.timetable-panel { padding: 16px; }
+.timetable-panel h3 {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+table.timetable {
+  table-layout: fixed;
+  font-size: 0.82rem;
+}
+table.timetable th,
+table.timetable td {
+  padding: 8px;
+  vertical-align: top;
+}
+table.timetable thead th {
+  text-align: center;
+}
+table.timetable thead th.today {
+  background: var(--accent);
+  color: #fff;
+}
+table.timetable tbody th.period {
+  font-weight: 600;
+  text-align: left;
+  background: var(--thead-bg);
+}
+table.timetable tbody td.today {
+  background: var(--accent-soft);
+}
+table.timetable tbody td.empty {
+  background: transparent;
+}
+.slot-course { font-weight: 600; }
+.slot-faculty { color: var(--muted); font-size: 0.78rem; }
+.slot-room { color: var(--accent); font-size: 0.78rem; font-weight: 500; }
+.today-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
 /* PYQ results */
 .pyq-grid {
   display: grid;

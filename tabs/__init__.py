@@ -12,6 +12,7 @@ from tabs.home import home_bp
 from tabs.pyqs import pyqs_bp
 from tabs.students import students_bp
 from tabs.terms import terms_bp
+from tabs.timetable import timetable_bp
 
 __all__ = [
     "books_bp",
@@ -21,4 +22,5 @@ __all__ = [
     "pyqs_bp",
     "students_bp",
     "terms_bp",
+    "timetable_bp",
 ]
