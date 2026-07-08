@@ -165,3 +165,8 @@ cython_debug/
 
 # Streamlit project backup (kept locally during Flask migration)
 backup_streamlit/
+
+# Standalone CLI helper — superseded by the Flask /students/ page and
+# the /timetable/ page
+search_student.py
+search_student.*
