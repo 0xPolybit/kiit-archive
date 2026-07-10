@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
-from flask import Blueprint, current_app, render_template, request
+from flask import Blueprint, current_app, render_template, request, session
 
 from tabs._timetable_data import (
     Slot,
@@ -148,7 +148,16 @@ def _search(app_root: str, q: str) -> tuple[list[Match], str]:
 def index():
     app_root = current_app.root_path
     q = request.args.get("q", "").strip()
-    combine = request.args.get("combine", "").strip().lower() in ("1", "true", "yes")
+
+    # The combine/split choice is sticky: an explicit ?combine= in the
+    # URL (from clicking the toggle) both drives this render AND
+    # updates the stored preference, so reopening /timetable/ later
+    # (with no query param at all) remembers the last choice.
+    if "combine" in request.args:
+        combine = request.args.get("combine", "").strip().lower() in ("1", "true", "yes")
+        session["timetable_combine"] = combine
+    else:
+        combine = session.get("timetable_combine", False)
 
     matches: list[Match] = []
     note = ""
