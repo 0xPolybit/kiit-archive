@@ -90,8 +90,8 @@ def _looks_like_roll(q: str) -> bool:
     return bool(q) and q[0].isdigit()
 
 
-def _search(app_root: str, q: str) -> tuple[list[Match], str]:
-    """Resolve a query string into a list of student matches.
+def _search_single(app_root: str, q: str) -> tuple[list[Match], str]:
+    """Resolve a single (non-comma) query term into student matches.
 
     Returns (matches, note). `note` is non-empty when the result set was
     truncated or when the user should narrow their query.
@@ -140,6 +140,51 @@ def _search(app_root: str, q: str) -> tuple[list[Match], str]:
             "Use a more specific name to narrow the search."
             if total > 25 else "")
     return matches, note
+
+
+_COMBINED_MATCH_CAP = 40
+
+
+def _search(app_root: str, q: str) -> tuple[list[Match], str]:
+    """Resolve a query string, splitting on commas for multi-term search.
+
+    Each comma-separated term is resolved independently with
+    `_search_single()` (so "2405001, Aaryan, CS17" mixes a roll, a
+    name, and a section in one search). Matches are de-duplicated by
+    roll number, preserving the order terms were given in, and the
+    combined result is capped at `_COMBINED_MATCH_CAP`.
+    """
+    terms = [t.strip() for t in q.split(",") if t.strip()]
+    if not terms:
+        return [], ""
+    if len(terms) == 1:
+        return _search_single(app_root, terms[0])
+
+    seen_rolls: set[str] = set()
+    combined: list[Match] = []
+    no_match_terms: list[str] = []
+    for term in terms:
+        term_matches, _term_note = _search_single(app_root, term)
+        if not term_matches:
+            no_match_terms.append(term)
+        for m in term_matches:
+            if m.roll not in seen_rolls:
+                seen_rolls.add(m.roll)
+                combined.append(m)
+
+    total = len(combined)
+    capped = combined[:_COMBINED_MATCH_CAP]
+
+    note_parts = []
+    if no_match_terms:
+        note_parts.append(f"No matches for: {', '.join(no_match_terms)}.")
+    if total > len(capped):
+        note_parts.append(
+            f"Showing the first {len(capped)} of {total} combined matches "
+            "across all terms. Use fewer or more specific terms to narrow "
+            "the search."
+        )
+    return capped, " ".join(note_parts)
 
 
 # --- Routes ----------------------------------------------------------------

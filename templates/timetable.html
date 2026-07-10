@@ -5,6 +5,8 @@
   <p class="caption">
     Search by <strong>roll number</strong>, <strong>name</strong>, or
     <strong>section code</strong> (e.g., <code>CS17</code>).
+    Separate multiple identifiers with <strong>commas</strong> to look
+    several up at once (e.g., <code>2405001, Aaryan, CS17</code>).
     Today's column is highlighted across every schedule.
   </p>
 
@@ -12,9 +14,9 @@
     <form method="get" action="{{ url_for('timetable.index') }}">
       <div class="form-row">
         <div class="field">
-          <label for="q">Identifier</label>
+          <label for="q">Identifier(s)</label>
           <input id="q" name="q" type="search" value="{{ q }}"
-                 placeholder="2405001  &middot;  Aaryan  &middot;  CS17" autofocus>
+                 placeholder="2405001, Aaryan, CS17" autofocus>
         </div>
       </div>
       <div style="margin-top: 16px;">
@@ -122,130 +124,143 @@
         {% endif %}
       </div>
 
-      {% if combine %}
-        {# --- Combined view: one table, three sections overlaid ----------- #}
-        <div class="panel timetable-panel combined-panel">
-          <h3>
-            Combined weekly timetable
-            <span class="combined-legend">
-              {% for label, slug, view, code in mv.sections %}
-                {% if code %}
-                  <span class="legend-pill {{ slug }}">
-                    <span class="legend-tag">{{ label }}</span>
-                    <span class="legend-code">{{ code }}</span>
-                  </span>
-                {% endif %}
-              {% endfor %}
-            </span>
-          </h3>
-          <div class="table-wrap">
-            <table class="data timetable combined">
-              <thead>
-                <tr>
-                  <th>Period</th>
-                  {% for day in mv.core.days %}
-                    <th class="{% if day == today %}today{% endif %}">
-                      {{ day }}
-                      {% if day == today %}<span class="today-pill">Today</span>{% endif %}
-                    </th>
-                  {% endfor %}
-                </tr>
-              </thead>
-              <tbody>
-                {% for plabel, pstart in mv.core.periods %}
-                  {% set period_idx = loop.index0 %}
+      <details class="timetable-details">
+        <summary>
+          <span class="summary-closed">
+            <span class="material-symbols-rounded">expand_more</span>
+            Show weekly timetable
+          </span>
+          <span class="summary-open">
+            <span class="material-symbols-rounded">expand_less</span>
+            Hide weekly timetable
+          </span>
+        </summary>
+
+        {% if combine %}
+          {# --- Combined view: one table, three sections overlaid ----------- #}
+          <div class="panel timetable-panel combined-panel">
+            <h3>
+              Combined weekly timetable
+              <span class="combined-legend">
+                {% for label, slug, view, code in mv.sections %}
+                  {% if code %}
+                    <span class="legend-pill {{ slug }}">
+                      <span class="legend-tag">{{ label }}</span>
+                      <span class="legend-code">{{ code }}</span>
+                    </span>
+                  {% endif %}
+                {% endfor %}
+              </span>
+            </h3>
+            <div class="table-wrap">
+              <table class="data timetable combined">
+                <thead>
                   <tr>
-                    <th class="period">
-                      {{ plabel }}<br>
-                      <span class="muted-text">{{ pstart }}</span>
-                    </th>
+                    <th>Period</th>
                     {% for day in mv.core.days %}
-                      <td class="{% if day == today %}today{% endif %}">
-                        {% for label, slug, view, code in mv.sections %}
-                          {% if code %}
-                            {% set slot = view.schedule[day][period_idx] %}
-                            {% if not slot.is_empty %}
-                              <div class="combined-entry {{ slug }}">
-                                <span class="section-tag">{{ label }}</span>
-                                <div class="slot-course">{{ slot.course }}</div>
-                                {% if slot.faculty %}<div class="slot-faculty">{{ slot.faculty }}</div>{% endif %}
-                                {% if slot.room %}<div class="slot-room">{{ slot.room }}</div>{% endif %}
-                              </div>
-                            {% endif %}
-                          {% endif %}
-                        {% endfor %}
-                      </td>
+                      <th class="{% if day == today %}today{% endif %}">
+                        {{ day }}
+                        {% if day == today %}<span class="today-pill">Today</span>{% endif %}
+                      </th>
                     {% endfor %}
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      {% else %}
-        {# --- Split view: three independent tables ----------------------- #}
-        <div class="timetable-grid">
-          {% for label, view, code in [
-            ('Core', mv.core, m.core_section),
-            ('PE1',  mv.pe1,  m.pe1_section),
-            ('PE2',  mv.pe2,  m.pe2_section),
-          ] %}
-            <div class="panel timetable-panel">
-              <h3>
-                {{ label }}
-                {% if code %}
-                  <span class="section-pill">{{ code }}</span>
-                {% else %}
-                  <span class="muted-text">&mdash; not assigned</span>
-                {% endif %}
-              </h3>
-              {% if code and view.schedule %}
-                <div class="table-wrap">
-                  <table class="data timetable">
-                    <thead>
-                      <tr>
-                        <th>Period</th>
-                        {% for day in view.days %}
-                          <th class="{% if day == view.today %}today{% endif %}">
-                            {{ day }}
-                            {% if day == view.today %}<span class="today-pill">Today</span>{% endif %}
-                          </th>
-                        {% endfor %}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for plabel, pstart in view.periods %}
-                        {% set period_idx = loop.index0 %}
-                        <tr>
-                          <th class="period">
-                            {{ plabel }}<br>
-                            <span class="muted-text">{{ pstart }}</span>
-                          </th>
-                          {% for day in view.days %}
-                            {% set slot = view.schedule[day][period_idx] %}
-                            <td class="{% if day == view.today %}today{% endif %} {% if slot.is_empty %}empty{% endif %}">
+                </thead>
+                <tbody>
+                  {% for plabel, pstart in mv.core.periods %}
+                    {% set period_idx = loop.index0 %}
+                    <tr>
+                      <th class="period">
+                        {{ plabel }}<br>
+                        <span class="muted-text">{{ pstart }}</span>
+                      </th>
+                      {% for day in mv.core.days %}
+                        <td class="{% if day == today %}today{% endif %}">
+                          {% for label, slug, view, code in mv.sections %}
+                            {% if code %}
+                              {% set slot = view.schedule[day][period_idx] %}
                               {% if not slot.is_empty %}
-                                <div class="slot-course">{{ slot.course }}</div>
-                                {% if slot.faculty %}<div class="slot-faculty">{{ slot.faculty }}</div>{% endif %}
-                                {% if slot.room %}<div class="slot-room">{{ slot.room }}</div>{% endif %}
+                                <div class="combined-entry {{ slug }}">
+                                  <span class="section-tag">{{ label }}</span>
+                                  <div class="slot-course">{{ slot.course }}</div>
+                                  {% if slot.faculty %}<div class="slot-faculty">{{ slot.faculty }}</div>{% endif %}
+                                  {% if slot.room %}<div class="slot-room">{{ slot.room }}</div>{% endif %}
+                                </div>
                               {% endif %}
-                            </td>
+                            {% endif %}
+                          {% endfor %}
+                        </td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% else %}
+          {# --- Split view: three independent tables ----------------------- #}
+          <div class="timetable-grid">
+            {% for label, view, code in [
+              ('Core', mv.core, m.core_section),
+              ('PE1',  mv.pe1,  m.pe1_section),
+              ('PE2',  mv.pe2,  m.pe2_section),
+            ] %}
+              <div class="panel timetable-panel">
+                <h3>
+                  {{ label }}
+                  {% if code %}
+                    <span class="section-pill">{{ code }}</span>
+                  {% else %}
+                    <span class="muted-text">&mdash; not assigned</span>
+                  {% endif %}
+                </h3>
+                {% if code and view.schedule %}
+                  <div class="table-wrap">
+                    <table class="data timetable">
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          {% for day in view.days %}
+                            <th class="{% if day == view.today %}today{% endif %}">
+                              {{ day }}
+                              {% if day == view.today %}<span class="today-pill">Today</span>{% endif %}
+                            </th>
                           {% endfor %}
                         </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              {% else %}
-                <div class="empty-state" style="padding: 24px 8px;">
-                  <span class="material-symbols-rounded">event_busy</span>
-                  <p>No schedule found for this section.</p>
-                </div>
-              {% endif %}
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
+                      </thead>
+                      <tbody>
+                        {% for plabel, pstart in view.periods %}
+                          {% set period_idx = loop.index0 %}
+                          <tr>
+                            <th class="period">
+                              {{ plabel }}<br>
+                              <span class="muted-text">{{ pstart }}</span>
+                            </th>
+                            {% for day in view.days %}
+                              {% set slot = view.schedule[day][period_idx] %}
+                              <td class="{% if day == view.today %}today{% endif %} {% if slot.is_empty %}empty{% endif %}">
+                                {% if not slot.is_empty %}
+                                  <div class="slot-course">{{ slot.course }}</div>
+                                  {% if slot.faculty %}<div class="slot-faculty">{{ slot.faculty }}</div>{% endif %}
+                                  {% if slot.room %}<div class="slot-room">{{ slot.room }}</div>{% endif %}
+                                {% endif %}
+                              </td>
+                            {% endfor %}
+                          </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <div class="empty-state" style="padding: 24px 8px;">
+                    <span class="material-symbols-rounded">event_busy</span>
+                    <p>No schedule found for this section.</p>
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </details>
     </div>
   {% endfor %}
 
@@ -261,6 +276,9 @@
             in that section
             (e.g., <code>CS17</code> finds the core section,
             <code>IPA17</code> finds everyone in that elective).</li>
+        <li><strong>Multiple identifiers</strong> &mdash; separate with
+            commas to search several at once
+            (e.g., <code>2405001, Aaryan, CS17</code>).</li>
       </ul>
       <p class="muted-text" style="margin: 12px 0 0; font-size: 0.85rem;">
         Dataset: {{ "{:,}".format(stats.core_rolls) }} core assignments,

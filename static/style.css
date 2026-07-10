@@ -374,6 +374,40 @@ table.data tbody tr:hover { background: var(--row-hover); }
 }
 .meta-chip .material-symbols-rounded { font-size: 14px; }
 
+/* Collapsible per-match timetable */
+.timetable-details { margin-top: 12px; }
+.timetable-details summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--text);
+  user-select: none;
+}
+.timetable-details summary::-webkit-details-marker { display: none; }
+.timetable-details summary::marker { content: ""; }
+.timetable-details summary:hover { background: var(--thead-bg); }
+.timetable-details .summary-open,
+.timetable-details .summary-closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.timetable-details:not([open]) .summary-open { display: none; }
+.timetable-details[open] .summary-closed { display: none; }
+.timetable-details[open] summary {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.timetable-details .material-symbols-rounded { font-size: 18px; color: var(--muted); }
+
 .timetable-grid {
   display: flex;
   flex-direction: column;
