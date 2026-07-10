@@ -90,6 +90,18 @@
                   PE2: {{ m.pe2_section }}
                 </span>
               {% endif %}
+              {% if m.sem3_section %}
+                <span class="meta-chip muted">
+                  <span class="material-symbols-rounded">history</span>
+                  3rd Sem: {{ m.sem3_section }}
+                </span>
+              {% endif %}
+              {% if m.sem4_section %}
+                <span class="meta-chip muted">
+                  <span class="material-symbols-rounded">history</span>
+                  4th Sem: {{ m.sem4_section }}
+                </span>
+              {% endif %}
             </div>
           </div>
           <a class="toggle-pill {% if combine %}on{% endif %}"

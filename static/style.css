@@ -367,6 +367,11 @@ table.data tbody tr:hover { background: var(--row-hover); }
   background: var(--accent-soft);
   color: var(--accent);
 }
+.meta-chip.muted {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+}
 .meta-chip .material-symbols-rounded { font-size: 14px; }
 
 .timetable-grid {

@@ -28,6 +28,7 @@ from tabs._timetable_data import (
     find_students_by_name,
     get_student,
     has_section,
+    legacy_sections_for_roll,
     periods as data_periods,
     rolls_in_section,
     schedule_for,
@@ -47,6 +48,8 @@ class Match:
     core_section: Optional[str]
     pe1_section: Optional[str]
     pe2_section: Optional[str]
+    sem3_section: Optional[str]
+    sem4_section: Optional[str]
 
 
 @dataclass
@@ -71,12 +74,15 @@ def _schedule_for_section(app_root: str, section: Optional[str]) -> TimetableVie
 
 def _build_match(app_root: str, roll: str) -> Match:
     core, pe1, pe2 = section_for_roll(app_root, roll)
+    sem3, sem4 = legacy_sections_for_roll(app_root, roll)
     return Match(
         student=get_student(app_root, roll),
         roll=roll,
         core_section=core,
         pe1_section=pe1,
         pe2_section=pe2,
+        sem3_section=sem3,
+        sem4_section=sem4,
     )
 
 

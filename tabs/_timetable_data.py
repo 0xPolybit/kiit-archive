@@ -1,13 +1,20 @@
-"""Loaders for the 5th-semester timetable Excel files.
+"""Loaders for the timetable Excel files (3rd, 4th, and 5th semester).
 
-Two sheets feed the timetable page:
+Sheets that feed the timetable page:
 
 * `timetable/Section detail_5th.xlsx` — per-student section assignments
-  in two sub-sheets:
+  for 5th semester, in two sub-sheets:
     - `Core`     : roll  → core section (e.g., "CS17")
     - `Elective` : roll  → (PE1 section, PE2 section)
 * `timetable/5th_Semester_timetable_core_elective_student.xlsx` —
-  per-section weekly schedule, one row per (section, day).
+  per-section weekly schedule for 5th semester, one row per
+  (section, day).
+* `timetable/Timetable_3rd_sem.xls` — legacy-format (.xls) workbook
+  with a `section_detail` sheet: roll → 3rd-semester section
+  (e.g., "CSE-14"). Its own timetable sheet is not used here — only
+  the section assignment is surfaced.
+* `timetable/4th semester TT and Section Detail.xls` — same shape,
+  `Section Detail` sheet: roll → 4th-semester section.
 
 To keep requests cheap, the Excel files are parsed once and cached in
 module-level dicts. Call `_reset_cache()` (e.g., from a test) to drop
@@ -24,6 +31,7 @@ from datetime import date
 from typing import Optional
 
 import openpyxl
+import xlrd
 
 
 # --- Module-level cache ----------------------------------------------------
@@ -34,6 +42,8 @@ _CACHE: dict = {
     "section_schedule": None,    # str → { day: [10 slots] }
     "periods": None,             # list[(label, start_time)]  e.g. [("P1", "08:00"), ...]
     "days": None,                # ordered list of day names
+    "roll_to_sem3": None,        # str → 3rd-semester section code
+    "roll_to_sem4": None,        # str → 4th-semester section code
 }
 
 
@@ -52,6 +62,55 @@ def _detail_path(app_root: str) -> str:
 
 def _schedule_path(app_root: str) -> str:
     return os.path.join(_data_dir(app_root), "5th_Semester_timetable_core_elective_student.xlsx")
+
+
+def _sem3_path(app_root: str) -> str:
+    return os.path.join(_data_dir(app_root), "Timetable_3rd_sem.xls")
+
+
+def _sem4_path(app_root: str) -> str:
+    return os.path.join(_data_dir(app_root), "4th semester TT and Section Detail.xls")
+
+
+# --- Legacy .xls section-detail parsing -------------------------------------
+
+_SECTION_CODE_RE = re.compile(r"^([A-Za-z]+)-0*(\d+)$")
+
+
+def _normalize_section_code(sec: str) -> str:
+    """Canonicalize section codes so 'CSE-01' and 'CSE-1' compare equal."""
+    sec = sec.strip().upper()
+    m = _SECTION_CODE_RE.match(sec)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
+    return sec
+
+
+def _xls_cell_to_roll(value) -> Optional[str]:
+    """xlrd reads numeric roll numbers as floats (e.g. 2405001.0)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, float):
+        return str(int(value))
+    return str(value).strip()
+
+
+def _load_legacy_section_map(path: str, sheet_name: str) -> dict[str, str]:
+    """Read a two-column (roll, section) sheet from a legacy .xls file."""
+    out: dict[str, str] = {}
+    if not os.path.exists(path):
+        return out
+    wb = xlrd.open_workbook(path)
+    if sheet_name not in wb.sheet_names():
+        return out
+    ws = wb.sheet_by_name(sheet_name)
+    for r in range(1, ws.nrows):  # row 0 is the header
+        roll = _xls_cell_to_roll(ws.cell_value(r, 0))
+        section = ws.cell_value(r, 1)
+        if not roll or not section:
+            continue
+        out[roll] = _normalize_section_code(str(section))
+    return out
 
 
 # --- Data shapes -----------------------------------------------------------
@@ -168,11 +227,16 @@ def _load_all(app_root: str) -> None:
                     slots.append(Slot(day_str, len(slots) + 1, "", "", "", "", ""))
                 section_schedule.setdefault(sec, {})[day_str] = slots
 
+    roll_to_sem3 = _load_legacy_section_map(_sem3_path(app_root), "section_detail")
+    roll_to_sem4 = _load_legacy_section_map(_sem4_path(app_root), "Section Detail")
+
     _CACHE["roll_to_core"] = roll_to_core
     _CACHE["roll_to_elective"] = roll_to_elective
     _CACHE["section_schedule"] = section_schedule
     _CACHE["periods"] = periods
     _CACHE["days"] = days
+    _CACHE["roll_to_sem3"] = roll_to_sem3
+    _CACHE["roll_to_sem4"] = roll_to_sem4
 
 
 # --- Public accessors ------------------------------------------------------
@@ -186,6 +250,12 @@ def _data_or(app_root: str):
         _CACHE["periods"],
         _CACHE["days"],
     )
+
+
+def legacy_sections_for_roll(app_root: str, roll: str) -> tuple[Optional[str], Optional[str]]:
+    """Return (3rd-sem section, 4th-sem section) codes for a roll, or Nones."""
+    _ensure_loaded(app_root)
+    return _CACHE["roll_to_sem3"].get(roll), _CACHE["roll_to_sem4"].get(roll)
 
 
 def section_for_roll(app_root: str, roll: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
@@ -347,10 +417,13 @@ def has_section(app_root: str, section: str) -> bool:
 
 def stats(app_root: str) -> dict:
     core, elec, schedule, periods_, days_ = _data_or(app_root)
+    _ensure_loaded(app_root)
     return {
         "core_rolls": len(core),
         "elective_rolls": len(elec),
         "sections_in_schedule": len(schedule),
         "periods": len(periods_),
         "days": list(days_),
+        "sem3_rolls": len(_CACHE["roll_to_sem3"]),
+        "sem4_rolls": len(_CACHE["roll_to_sem4"]),
     }
