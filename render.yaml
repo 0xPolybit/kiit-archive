@@ -1,26 +1,25 @@
-# Render blueprint — one command deploys the whole service.
+# Render blueprint.
 #
-#   1. Push this repo to GitHub (already done).
-#   2. In the Render dashboard, click "New" -> "Blueprint",
-#      point it at this repository, and accept the plan.
-#   Render reads this file and creates the web service with the
-#   correct build / start commands and environment variables.
+#   Dashboard -> New -> Blueprint -> point at this repo.
 #
-# Local override: pass --render 0 / --workers 1 to scale down for
-# cheap hobby deployments. The Procfile is what Render actually runs.
+# `npm run build` triggers the `prebuild` hook, which runs
+# scripts/build-data.ts to regenerate src/data/generated/data.json from the
+# workbooks in timetable/ and students/. That artifact is gitignored, so the
+# build step is what produces it — dropping in a new spreadsheet and pushing is
+# all that's needed to refresh the data.
 
 services:
   - type: web
     name: kiit-archive
-    runtime: python
+    runtime: node
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn -c gunicorn.conf.py app:app
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
     autoDeploy: true
     envVars:
-      - key: PYTHONUNBUFFERED
-        value: "true"
-      - key: WEB_CONCURRENCY
-        value: "2"
-      - key: KIIT_ARCHIVE_SECRET
-        generateValue: true
+      - key: NODE_VERSION
+        value: "22"
+      # Next.js binds to $PORT, which Render injects automatically.
+      - key: NODE_ENV
+        value: production
