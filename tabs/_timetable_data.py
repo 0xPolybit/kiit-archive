@@ -149,6 +149,10 @@ _PERIOD_NUM_RE = re.compile(r"^P(\d+)")
 _PERIOD_PAREN_RE = re.compile(r"\(([^)]+)\)")
 _PERIOD_TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?:\s*[APap][Mm])?)")
 
+# Group-header rows look like "Sem 5 | CS-S5 | CS1" -- extract the
+# leading semester number so rows can be scoped to semester 5 only.
+_SEMESTER_HEADER_RE = re.compile(r"^Sem\s*(\d+)", re.IGNORECASE)
+
 
 def _parse_periods(header_row) -> list[tuple[str, str]]:
     """Extract [(label, display_time), ...] from the header row.
@@ -227,12 +231,29 @@ def _load_all(app_root: str) -> None:
             ws = wb["Section Grid"]
             header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True))
             periods = _parse_periods(header)
+
+            # The sheet stacks every semester's sections one after
+            # another, each block introduced by a group-header row like
+            # "Sem 5 | CS-S5 | CS1" / "6 course group(s)". Section
+            # codes are reused across semesters (Sem 5's "CS1" and Sem
+            # 7's "CS1" are different sections), so track which
+            # semester block we're currently inside and only keep rows
+            # belonging to semester 5 -- otherwise a same-named later
+            # section silently overwrites the real one in the dict.
+            current_semester: Optional[int] = None
             for row in ws.iter_rows(min_row=2, values_only=True):
                 if not row or row[0] is None:
                     continue
                 sec = str(row[0]).strip()
+                is_group_header = "|" in sec or sec.startswith("Sem ")
+                if is_group_header:
+                    m = _SEMESTER_HEADER_RE.match(sec)
+                    current_semester = int(m.group(1)) if m else None
+                    continue
+                if current_semester != 5:
+                    continue
                 day = row[1] if row[1] is not None else None
-                if not day or "Sem 5" in str(sec) or "|" in str(sec):
+                if not day:
                     continue
                 day_str = str(day).strip()
                 if day_str not in days:
