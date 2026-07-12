@@ -180,3 +180,7 @@ node_modules/
 out/
 next-env.d.ts
 .vercel
+
+# Generated from the source workbooks by scripts/build-data.ts (npm prebuild).
+# Not committed: it's a derived artifact, and the sources live in timetable/.
+src/data/generated/

@@ -1,0 +1,29 @@
+{
+  "name": "kiit-archive",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Unofficial archive of publicly available KIIT University documents",
+  "scripts": {
+    "build:data": "tsx scripts/build-data.ts",
+    "prebuild": "npm run build:data",
+    "predev": "npm run build:data",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
