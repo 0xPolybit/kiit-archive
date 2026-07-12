@@ -170,3 +170,13 @@ backup_streamlit/
 # the /timetable/ page
 search_student.py
 search_student.*
+
+# Flask project backup (kept locally during the Next.js migration)
+backup_flask/
+
+# Next.js
+node_modules/
+.next/
+out/
+next-env.d.ts
+.vercel
