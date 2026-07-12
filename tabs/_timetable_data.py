@@ -142,20 +142,37 @@ class Slot:
 
 # --- Parsers ---------------------------------------------------------------
 
-_PERIOD_RE = re.compile(r"^P(\d+)\s*\n?\s*(\d{1,2}:\d{2})", re.MULTILINE)
+# Header cells have appeared in two shapes:
+#   "P1\n08:00"                      (older export: label, newline, 24h start)
+#   "P1 (8:00 AM-9:00 AM)"            (current export: label, parenthesized range)
+_PERIOD_NUM_RE = re.compile(r"^P(\d+)")
+_PERIOD_PAREN_RE = re.compile(r"\(([^)]+)\)")
+_PERIOD_TIME_RE = re.compile(r"(\d{1,2}:\d{2}(?:\s*[APap][Mm])?)")
 
 
 def _parse_periods(header_row) -> list[tuple[str, str]]:
-    """Extract [(label, start), ...] from the header row."""
+    """Extract [(label, display_time), ...] from the header row.
+
+    `display_time` is whatever's most informative for that export: the
+    full "8:00 AM-9:00 AM" range when parenthesized, otherwise just the
+    bare start time ("08:00").
+    """
     periods = []
     for cell in header_row[2:]:  # skip "Section", "Day"
         if cell is None:
             continue
-        text = str(cell)
-        m = _PERIOD_RE.match(text)
-        if m:
-            label = f"P{m.group(1)}"
-            periods.append((label, m.group(2)))
+        text = str(cell).strip()
+        m = _PERIOD_NUM_RE.match(text)
+        if not m:
+            continue
+        label = f"P{m.group(1)}"
+        paren = _PERIOD_PAREN_RE.search(text)
+        if paren:
+            display = paren.group(1).strip()
+        else:
+            tm = _PERIOD_TIME_RE.search(text)
+            display = tm.group(1) if tm else ""
+        periods.append((label, display))
     return periods
 
 
