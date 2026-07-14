@@ -1,19 +1,26 @@
 /**
  * Build-time data pipeline.
  *
- * The Flask app parsed four workbooks + a CSV on every cold start. Here we
- * do it once at build time and emit plain JSON that the Next.js app imports,
- * so no spreadsheet library ships to the runtime at all.
+ * Parses the source workbooks + CSV once at build time and emits plain JSON
+ * that the Next.js app imports, so no spreadsheet library ships to the
+ * runtime at all.
  *
  * Sources (all under timetable/ and students/):
  *   students/2024students.csv                             roll,name,section
  *   timetable/Section detail_5th.xlsx                     Core + Elective sheets
- *   timetable/5th_Semester_timetable_core_elective_student.xlsx   Section Grid
+ *   timetable/5th_Semester_timetable_core_elective_student.xlsx
+ *       "Section Grid No Faculty"  Section, Day, P1..P10 -- 2-line cells
+ *                                  ("COURSE\nROOM", no faculty)
+ *       "Section Allocation Grid"  one column per course code, one row per
+ *                                  section, cell = faculty name -- joined
+ *                                  against the grid above by (section, course)
+ *       (older exports had a single "Section Grid" sheet with 3-line cells,
+ *        "COURSE\nFACULTY\nROOM" -- still supported as a fallback)
  *   timetable/Timetable_3rd_sem.xls                       section_detail sheet
  *   timetable/4th semester TT and Section Detail.xls      Section Detail sheet
  *
- * Every non-obvious transform here mirrors a hard-won fix in the Flask
- * version; the comments flag the ones that bite.
+ * Every non-obvious transform here mirrors a hard-won fix from an earlier
+ * export's quirks; the comments flag the ones that bite.
  */
 import * as XLSX from "xlsx";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -187,8 +194,36 @@ function parsePeriods(header: unknown[]): Periods {
   return periods;
 }
 
-/** A populated cell is three lines: course, faculty, room. */
-function parseSlot(cell: unknown): Slot | null {
+/**
+ * Yield only the data rows belonging to semester 5, tracking group-header
+ * rows ("Sem 5 | CS-S5 | CS1", "6 course group(s)") as the sheet is walked.
+ *
+ * Both the schedule sheet and the faculty-allocation sheet stack every
+ * semester's sections back to back, and section codes are reused across
+ * semesters -- Sem 5's "CS1" and Sem 7's "CS1" are different sections, and 42
+ * codes collide between them. Rows outside the Sem 5 block are skipped
+ * entirely rather than merged, so a same-named later section can't silently
+ * overwrite the real one (and can't blank out days the other semester
+ * doesn't use).
+ */
+function* semester5Rows(data: unknown[][]): Generator<unknown[]> {
+  let currentSemester: number | null = null;
+  for (const row of data) {
+    const first = cellText(row[0]);
+    if (!first) continue; // blank separator row
+
+    const isGroupHeader = first.includes("|") || /^Sem\s/i.test(first);
+    if (isGroupHeader) {
+      const m = /^Sem\s*(\d+)/i.exec(first);
+      currentSemester = m ? Number.parseInt(m[1], 10) : null;
+      continue;
+    }
+    if (currentSemester === 5) yield row;
+  }
+}
+
+/** Older export shape: a populated cell is three lines, course/faculty/room. */
+function parseSlotInline(cell: unknown): Slot | null {
   const text = cellText(cell);
   if (!text) return null;
   const lines = text
@@ -199,56 +234,145 @@ function parseSlot(cell: unknown): Slot | null {
   return { c: lines[0] ?? "", f: lines[1] ?? "", r: lines[2] ?? "" };
 }
 
+/**
+ * Current export shape: a populated cell is two lines, course/room -- the
+ * faculty name is looked up separately from the "Section Allocation Grid"
+ * sheet, keyed by (section, course code).
+ */
+function parseSlotWithFaculty(
+  cell: unknown,
+  facultyMap: Map<string, Map<string, string>>,
+  section: string,
+): Slot | null {
+  const text = cellText(cell);
+  if (!text) return null;
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+
+  const course = lines[0] ?? "";
+  const room = lines[1] ?? "";
+  const faculty = facultyMap.get(section)?.get(course) ?? "";
+  return { c: course, f: faculty, r: room };
+}
+
+/**
+ * Build (section -> course code -> faculty) from the "Section Allocation
+ * Grid" sheet. Each semester-5 group ("Sem 5 | CS-S5", "Sem 5 | HPC-S5-PE1",
+ * ...) repeats its own "Section" column-header row naming the course codes
+ * for that group's columns (e.g. "CN\nCORE" -> course code "CN"; elective
+ * groups have exactly one course column, e.g. "HPC\nPE"); the section rows
+ * beneath hold the faculty teaching each course for that section.
+ */
+function buildFacultyMap(allocData: unknown[][]): Map<string, Map<string, string>> {
+  const map = new Map<string, Map<string, string>>();
+  let courseCols: (string | null)[] | null = null;
+
+  for (const row of semester5Rows(allocData)) {
+    const first = cellText(row[0]);
+
+    if (first === "Section") {
+      courseCols = row.slice(1).map((cell) => {
+        const text = cellText(cell);
+        return text ? (text.split(/\r?\n/)[0]?.trim() ?? null) : null;
+      });
+      continue;
+    }
+    if (!courseCols) continue; // malformed sheet; no column header seen yet
+
+    const bySection = map.get(first) ?? new Map<string, string>();
+    courseCols.forEach((code, i) => {
+      if (!code) return;
+      const faculty = cellText(row[1 + i]);
+      if (faculty) bySection.set(code, faculty);
+    });
+    if (bySection.size > 0) map.set(first, bySection);
+  }
+
+  return map;
+}
+
 interface GridResult {
   periods: Periods;
   days: string[];
   schedule: Record<string, Record<string, (Slot | null)[]>>;
 }
 
-function buildGrid(): GridResult {
-  const empty: GridResult = { periods: [], days: [], schedule: {} };
-  const wb = readWorkbook(
-    join(ROOT, "timetable", "5th_Semester_timetable_core_elective_student.xlsx"),
-  );
-  if (!wb || !wb.SheetNames.includes("Section Grid")) return empty;
+const EMPTY_GRID: GridResult = { periods: [], days: [], schedule: {} };
 
+/** Current shape: schedule and faculty roster split across two sheets. */
+function buildGridSplitFaculty(wb: XLSX.WorkBook): GridResult {
+  const gridData = rows(wb.Sheets["Section Grid No Faculty"]);
+  if (gridData.length === 0) return EMPTY_GRID;
+
+  const periods = parsePeriods(gridData[0]);
+  const facultyMap = buildFacultyMap(rows(wb.Sheets["Section Allocation Grid"]));
+
+  const days: string[] = [];
+  const schedule: GridResult["schedule"] = {};
+
+  for (const row of semester5Rows(gridData.slice(1))) {
+    const section = cellText(row[0]);
+    const day = cellText(row[1]);
+    if (!day) continue;
+    if (!days.includes(day)) days.push(day);
+
+    const slots: (Slot | null)[] = periods.map((_, i) =>
+      parseSlotWithFaculty(row[2 + i], facultyMap, section),
+    );
+    schedule[section] ??= {};
+    schedule[section][day] = slots;
+  }
+
+  return { periods, days, schedule };
+}
+
+/**
+ * Older shape: a single "Section Grid" sheet with faculty embedded in the
+ * cell text. Kept as a fallback in case a future export reverts to this
+ * shape; not the current path.
+ */
+function buildGridInlineFaculty(wb: XLSX.WorkBook): GridResult {
   const data = rows(wb.Sheets["Section Grid"]);
-  if (data.length === 0) return empty;
+  if (data.length === 0) return EMPTY_GRID;
 
   const periods = parsePeriods(data[0]);
   const days: string[] = [];
   const schedule: GridResult["schedule"] = {};
 
-  // The sheet stacks EVERY semester's sections back to back, each block
-  // introduced by a group header like "Sem 5 | CS-S5 | CS1". Section codes are
-  // reused across semesters -- Sem 5's "CS1" and Sem 7's "CS1" are different
-  // sections, and 42 codes collide. Without tracking which block we're inside,
-  // the later Sem 7 rows silently overwrite real Sem 5 data (and blank out the
-  // days Sem 7 doesn't use). Scope strictly to semester 5.
-  let currentSemester: number | null = null;
-
-  for (const row of data.slice(1)) {
-    const first = cellText(row[0]);
-    if (!first) continue;
-
-    const isGroupHeader = first.includes("|") || /^Sem\s/i.test(first);
-    if (isGroupHeader) {
-      const m = /^Sem\s*(\d+)/i.exec(first);
-      currentSemester = m ? Number.parseInt(m[1], 10) : null;
-      continue;
-    }
-    if (currentSemester !== 5) continue;
-
+  for (const row of semester5Rows(data.slice(1))) {
+    const section = cellText(row[0]);
     const day = cellText(row[1]);
     if (!day) continue;
     if (!days.includes(day)) days.push(day);
 
-    const slots: (Slot | null)[] = periods.map((_, i) => parseSlot(row[2 + i]));
-    schedule[first] ??= {};
-    schedule[first][day] = slots;
+    const slots: (Slot | null)[] = periods.map((_, i) => parseSlotInline(row[2 + i]));
+    schedule[section] ??= {};
+    schedule[section][day] = slots;
   }
 
   return { periods, days, schedule };
+}
+
+function buildGrid(): GridResult {
+  const wb = readWorkbook(
+    join(ROOT, "timetable", "5th_Semester_timetable_core_elective_student.xlsx"),
+  );
+  if (!wb) return EMPTY_GRID;
+
+  const hasSplitSheets =
+    wb.SheetNames.includes("Section Grid No Faculty") &&
+    wb.SheetNames.includes("Section Allocation Grid");
+  if (hasSplitSheets) return buildGridSplitFaculty(wb);
+
+  if (wb.SheetNames.includes("Section Grid")) return buildGridInlineFaculty(wb);
+
+  console.warn(
+    `  ! unrecognised sheet names in the timetable workbook: ${wb.SheetNames.join(", ")}`,
+  );
+  return EMPTY_GRID;
 }
 
 // ---------------------------------------------------------------------------
