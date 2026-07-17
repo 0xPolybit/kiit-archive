@@ -18,7 +18,11 @@
  *        "COURSE\nFACULTY\nROOM" -- still supported as a fallback)
  *   timetable/Timetable_3rd_sem.xls                       section_detail sheet
  *   timetable/4th semester TT and Section Detail.xls      Section Detail sheet
+ *   timetable/CD and DMDW new section.xlsx                "new list" sheet --
+ *       roll -> new PE2 section override (CD/DMDW re-sectioning), applied on
+ *       top of Section detail_5th.xlsx's Elective sheet for the rolls listed
  *
+
  * Every non-obvious transform here mirrors a hard-won fix from an earlier
  * export's quirks; the comments flag the ones that bite.
  */
@@ -404,6 +408,36 @@ function buildSections(): Record<string, SectionAssignment> {
         assign(roll, { ...(pe1 && { pe1 }), ...(pe2 && { pe2 }) });
       }
     }
+  }
+
+  // --- 5th semester: CD/DMDW re-sectioning override -------------------------
+  // Some PE2 students were moved between CD and DMDW sections after
+  // Section detail_5th.xlsx was generated -- 5 brand-new DMDW sections
+  // (DMDW21-25) were created to absorb students migrating out of CD. This
+  // sheet is the authoritative override for exactly the rolls it lists;
+  // every other roll keeps whatever pe2 Section detail_5th.xlsx already gave
+  // it. Columns C-G hold an unrelated faculty-roster fragment pasted
+  // alongside the real data (confirmed by inspection: G is just a bare
+  // sequential list of the 13 section codes, unconnected to the roll in the
+  // same row) -- only columns A (roll) and B (new section) matter.
+  const cdDmdw = readWorkbook(join(ROOT, "timetable", "CD and DMDW new section.xlsx"));
+  if (cdDmdw && cdDmdw.SheetNames.includes("new list")) {
+    const newPe2 = new Map<string, string>(); // roll -> section, last row wins
+    for (const row of rows(cdDmdw.Sheets["new list"]).slice(1)) {
+      const roll = toRoll(row[0]);
+      const section = cellText(row[1]);
+      if (!roll || !section) continue;
+
+      const prev = newPe2.get(roll);
+      if (prev !== undefined && prev !== section) {
+        console.warn(
+          `  ! CD/DMDW re-section: roll ${roll} listed twice with different ` +
+            `sections (${prev} and ${section}) — using the later one.`,
+        );
+      }
+      newPe2.set(roll, section);
+    }
+    for (const [roll, pe2] of newPe2) assign(roll, { pe2 });
   }
 
   // --- Legacy .xls files: section code only, no schedule -------------------
