@@ -13,16 +13,22 @@
  *                                  ("COURSE\nROOM", no faculty)
  *       "Section Allocation Grid"  one column per course code, one row per
  *                                  section, cell = faculty name -- joined
- *                                  against the grid above by (section, course)
+ *                                  against the grid above by (section, course).
+ *                                  NOT always present -- some exports only
+ *                                  ship "Section Grid No Faculty"; see
+ *                                  loadFallbackFacultyMap() below.
  *       (older exports had a single "Section Grid" sheet with 3-line cells,
  *        "COURSE\nFACULTY\nROOM" -- still supported as a fallback)
+ *   timetable/Section Allocation Grid (faculty roster).xlsx
+ *       Standalone copy of the last export's "Section Allocation Grid" sheet.
+ *       Used only when the current schedule export doesn't ship its own --
+ *       see loadFallbackFacultyMap().
  *   timetable/Timetable_3rd_sem.xls                       section_detail sheet
  *   timetable/4th semester TT and Section Detail.xls      Section Detail sheet
  *   timetable/CD and DMDW new section.xlsx                "new list" sheet --
  *       roll -> new PE2 section override (CD/DMDW re-sectioning), applied on
  *       top of Section detail_5th.xlsx's Elective sheet for the rolls listed
  *
-
  * Every non-obvious transform here mirrors a hard-won fix from an earlier
  * export's quirks; the comments flag the ones that bite.
  */
@@ -306,14 +312,21 @@ interface GridResult {
 
 const EMPTY_GRID: GridResult = { periods: [], days: [], schedule: {} };
 
-/** Current shape: schedule and faculty roster split across two sheets. */
-function buildGridSplitFaculty(wb: XLSX.WorkBook): GridResult {
+/**
+ * Current shape: schedule and faculty roster split across two sheets.
+ *
+ * `facultyMap` is passed in rather than read from `wb` directly, because the
+ * schedule export doesn't reliably include its own "Section Allocation Grid"
+ * sheet every time (see buildGrid() for where the fallback roster comes from).
+ */
+function buildGridSplitFaculty(
+  wb: XLSX.WorkBook,
+  facultyMap: Map<string, Map<string, string>>,
+): GridResult {
   const gridData = rows(wb.Sheets["Section Grid No Faculty"]);
   if (gridData.length === 0) return EMPTY_GRID;
 
   const periods = parsePeriods(gridData[0]);
-  const facultyMap = buildFacultyMap(rows(wb.Sheets["Section Allocation Grid"]));
-
   const days: string[] = [];
   const schedule: GridResult["schedule"] = {};
 
@@ -360,16 +373,48 @@ function buildGridInlineFaculty(wb: XLSX.WorkBook): GridResult {
   return { periods, days, schedule };
 }
 
+/**
+ * timetable/Section Allocation Grid (faculty roster).xlsx is a standalone
+ * copy of the last export that DID include its own "Section Allocation Grid"
+ * sheet, extracted once and checked into the repo. The schedule workbook
+ * doesn't reliably include a fresh copy of that sheet on every export (one
+ * export dropped it entirely), so this file exists purely as a faculty-name
+ * fallback -- course/room/day always come from the current schedule export,
+ * never from here. Re-extract it (see scripts/build-data.ts git history for
+ * the one-off extraction script) whenever a future export brings its own
+ * fresher Allocation Grid, so the fallback doesn't go stale forever.
+ */
+function loadFallbackFacultyMap(): Map<string, Map<string, string>> {
+  const wb = readWorkbook(
+    join(ROOT, "timetable", "Section Allocation Grid (faculty roster).xlsx"),
+  );
+  if (!wb || !wb.SheetNames.includes("Section Allocation Grid")) {
+    return new Map();
+  }
+  return buildFacultyMap(rows(wb.Sheets["Section Allocation Grid"]));
+}
+
 function buildGrid(): GridResult {
   const wb = readWorkbook(
     join(ROOT, "timetable", "5th_Semester_timetable_core_elective_student.xlsx"),
   );
   if (!wb) return EMPTY_GRID;
 
-  const hasSplitSheets =
-    wb.SheetNames.includes("Section Grid No Faculty") &&
-    wb.SheetNames.includes("Section Allocation Grid");
-  if (hasSplitSheets) return buildGridSplitFaculty(wb);
+  if (wb.SheetNames.includes("Section Grid No Faculty")) {
+    let facultyMap: Map<string, Map<string, string>>;
+    if (wb.SheetNames.includes("Section Allocation Grid")) {
+      facultyMap = buildFacultyMap(rows(wb.Sheets["Section Allocation Grid"]));
+    } else {
+      console.warn(
+        "  ! this export has no 'Section Allocation Grid' sheet -- falling back to " +
+          "the persisted faculty roster (timetable/Section Allocation Grid (faculty " +
+          "roster).xlsx). New sections not in that roster (e.g. a section added since " +
+          "the roster was last refreshed) will show course + room but no faculty name.",
+      );
+      facultyMap = loadFallbackFacultyMap();
+    }
+    return buildGridSplitFaculty(wb, facultyMap);
+  }
 
   if (wb.SheetNames.includes("Section Grid")) return buildGridInlineFaculty(wb);
 
