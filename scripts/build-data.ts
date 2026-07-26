@@ -19,6 +19,11 @@
  *                                  loadFallbackFacultyMap() below.
  *       (older exports had a single "Section Grid" sheet with 3-line cells,
  *        "COURSE\nFACULTY\nROOM" -- still supported as a fallback)
+ *       (the sheet has also shipped renamed, e.g. "Time-table for 3rd year",
+ *        and without its own "Section" | "Day" | "P1".. header row at all --
+ *        buildGrid() falls back to treating a lone unrecognised sheet as the
+ *        schedule, and FALLBACK_PERIODS supplies the standard 10-period
+ *        layout when no header row is present)
  *   timetable/Section Allocation Grid (faculty roster).xlsx
  *       Standalone copy of the last export's "Section Allocation Grid" sheet.
  *       Used only when the current schedule export doesn't ship its own --
@@ -204,6 +209,30 @@ function parsePeriods(header: unknown[]): Periods {
   return periods;
 }
 
+/** True iff `row` is a real "Section | Day | P1 | P2 | ..." header row. */
+function looksLikePeriodHeader(row: unknown[]): boolean {
+  return cellText(row[0]) === "Section" && cellText(row[1]) === "Day";
+}
+
+/**
+ * Every export we've seen (whether or not it included its own header row)
+ * has used this same 8 AM - 6 PM, 10-period layout. Used when a schedule
+ * sheet's first row isn't a real period header -- i.e. the export omitted it
+ * and data starts immediately at row 0.
+ */
+const FALLBACK_PERIODS: Periods = [
+  { label: "P1", time: "8:00 AM-9:00 AM" },
+  { label: "P2", time: "9:00 AM-10:00 AM" },
+  { label: "P3", time: "10:00 AM-11:00 AM" },
+  { label: "P4", time: "11:00 AM-12:00 PM" },
+  { label: "P5", time: "12:00 PM-1:00 PM" },
+  { label: "P6", time: "1:00 PM-2:00 PM" },
+  { label: "P7", time: "2:00 PM-3:00 PM" },
+  { label: "P8", time: "3:00 PM-4:00 PM" },
+  { label: "P9", time: "4:00 PM-5:00 PM" },
+  { label: "P10", time: "5:00 PM-6:00 PM" },
+];
+
 /**
  * Yield only the data rows belonging to semester 5, tracking group-header
  * rows ("Sem 5 | CS-S5 | CS1", "6 course group(s)") as the sheet is walked.
@@ -315,22 +344,43 @@ const EMPTY_GRID: GridResult = { periods: [], days: [], schedule: {} };
 /**
  * Current shape: schedule and faculty roster split across two sheets.
  *
- * `facultyMap` is passed in rather than read from `wb` directly, because the
- * schedule export doesn't reliably include its own "Section Allocation Grid"
- * sheet every time (see buildGrid() for where the fallback roster comes from).
+ * `sheetName` is passed in rather than hardcoded, because the sheet holding
+ * the schedule has been renamed more than once ("Section Grid No Faculty",
+ * then a school-facing name like "Time-table for 3rd year"). `facultyMap` is
+ * passed in rather than read from `wb` directly, because the schedule export
+ * doesn't reliably include its own "Section Allocation Grid" sheet every time
+ * (see buildGrid() for where the fallback roster comes from).
  */
 function buildGridSplitFaculty(
   wb: XLSX.WorkBook,
+  sheetName: string,
   facultyMap: Map<string, Map<string, string>>,
 ): GridResult {
-  const gridData = rows(wb.Sheets["Section Grid No Faculty"]);
+  const gridData = rows(wb.Sheets[sheetName]);
   if (gridData.length === 0) return EMPTY_GRID;
 
-  const periods = parsePeriods(gridData[0]);
+  // Some exports omit the "Section | Day | P1 | P2 | ..." header row entirely
+  // and start straight in on data (the very first row is a group header like
+  // "Sem 5 | CS-S5 | CS1"). Detect that rather than blindly slicing off row 0
+  // and treating real data as a header.
+  let periods: Periods;
+  let dataRows: unknown[][];
+  if (looksLikePeriodHeader(gridData[0])) {
+    periods = parsePeriods(gridData[0]);
+    dataRows = gridData.slice(1);
+  } else {
+    console.warn(
+      "  ! no period-header row found in the schedule sheet -- falling back to " +
+        "the standard 10-period timetable (P1 8:00 AM .. P10 6:00 PM).",
+    );
+    periods = FALLBACK_PERIODS;
+    dataRows = gridData;
+  }
+
   const days: string[] = [];
   const schedule: GridResult["schedule"] = {};
 
-  for (const row of semester5Rows(gridData.slice(1))) {
+  for (const row of semester5Rows(dataRows)) {
     const section = cellText(row[0]);
     const day = cellText(row[1]);
     if (!day) continue;
@@ -347,19 +397,32 @@ function buildGridSplitFaculty(
 }
 
 /**
- * Older shape: a single "Section Grid" sheet with faculty embedded in the
- * cell text. Kept as a fallback in case a future export reverts to this
- * shape; not the current path.
+ * Older shape: a single sheet with faculty embedded in the cell text. Kept as
+ * a fallback in case a future export reverts to this shape; not the current
+ * path.
  */
-function buildGridInlineFaculty(wb: XLSX.WorkBook): GridResult {
-  const data = rows(wb.Sheets["Section Grid"]);
+function buildGridInlineFaculty(wb: XLSX.WorkBook, sheetName: string): GridResult {
+  const data = rows(wb.Sheets[sheetName]);
   if (data.length === 0) return EMPTY_GRID;
 
-  const periods = parsePeriods(data[0]);
+  let periods: Periods;
+  let dataRows: unknown[][];
+  if (looksLikePeriodHeader(data[0])) {
+    periods = parsePeriods(data[0]);
+    dataRows = data.slice(1);
+  } else {
+    console.warn(
+      "  ! no period-header row found in the schedule sheet -- falling back to " +
+        "the standard 10-period timetable (P1 8:00 AM .. P10 6:00 PM).",
+    );
+    periods = FALLBACK_PERIODS;
+    dataRows = data;
+  }
+
   const days: string[] = [];
   const schedule: GridResult["schedule"] = {};
 
-  for (const row of semester5Rows(data.slice(1))) {
+  for (const row of semester5Rows(dataRows)) {
     const section = cellText(row[0]);
     const day = cellText(row[1]);
     if (!day) continue;
@@ -413,10 +476,27 @@ function buildGrid(): GridResult {
       );
       facultyMap = loadFallbackFacultyMap();
     }
-    return buildGridSplitFaculty(wb, facultyMap);
+    return buildGridSplitFaculty(wb, "Section Grid No Faculty", facultyMap);
   }
 
-  if (wb.SheetNames.includes("Section Grid")) return buildGridInlineFaculty(wb);
+  if (wb.SheetNames.includes("Section Grid")) {
+    return buildGridInlineFaculty(wb, "Section Grid");
+  }
+
+  // The sheet holding the schedule has been renamed before (school-facing
+  // exports use names like "Time-table for 3rd year" rather than the
+  // internal report names above). Every export we've received so far has
+  // been single- or dual-sheet, and a lone sheet is virtually certain to be
+  // the schedule grid -- so fall back to treating it as one, always sourcing
+  // faculty from the persisted roster since an unrecognised sheet can't be
+  // assumed to carry its own allocation grid.
+  if (wb.SheetNames.length === 1) {
+    console.warn(
+      `  ! unrecognised sheet name '${wb.SheetNames[0]}' -- treating it as the ` +
+        "schedule grid and falling back to the persisted faculty roster.",
+    );
+    return buildGridSplitFaculty(wb, wb.SheetNames[0], loadFallbackFacultyMap());
+  }
 
   console.warn(
     `  ! unrecognised sheet names in the timetable workbook: ${wb.SheetNames.join(", ")}`,
